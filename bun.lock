@@ -5,6 +5,29 @@
     "": {
       "name": "@moenarch/geo-analysis",
     },
+    "packages/geo-clustering-app": {
+      "name": "@moenarch/geo-clustering-app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@moenarch/geo-clustering-wasm": "workspace:*",
+        "@vitejs/plugin-react": "^5.1.2",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "vite": "^7.3.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "autoprefixer": "^10.4.23",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.18",
+        "typescript": "^6.0.2",
+      },
+    },
+    "packages/geo-clustering-wasm": {
+      "name": "@moenarch/geo-clustering-wasm",
+      "version": "0.1.0",
+    },
     "packages/geo-core-app": {
       "name": "@moenarch/geo-core-app",
       "version": "0.1.0",
@@ -72,6 +95,29 @@
     },
     "packages/geo-io-osm-wasm": {
       "name": "@moenarch/geo-io-osm-wasm",
+      "version": "0.1.0",
+    },
+    "packages/geo-viz-app": {
+      "name": "@moenarch/geo-viz-app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@moenarch/geo-viz-wasm": "workspace:*",
+        "@vitejs/plugin-react": "^5.1.2",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "vite": "^7.3.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "autoprefixer": "^10.4.23",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.18",
+        "typescript": "^6.0.2",
+      },
+    },
+    "packages/geo-viz-wasm": {
+      "name": "@moenarch/geo-viz-wasm",
       "version": "0.1.0",
     },
   },
@@ -178,6 +224,10 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
+    "@moenarch/geo-clustering-app": ["@moenarch/geo-clustering-app@workspace:packages/geo-clustering-app"],
+
+    "@moenarch/geo-clustering-wasm": ["@moenarch/geo-clustering-wasm@workspace:packages/geo-clustering-wasm"],
+
     "@moenarch/geo-core-app": ["@moenarch/geo-core-app@workspace:packages/geo-core-app"],
 
     "@moenarch/geo-core-wasm": ["@moenarch/geo-core-wasm@workspace:packages/geo-core-wasm"],
@@ -189,6 +239,10 @@
     "@moenarch/geo-io-osm-app": ["@moenarch/geo-io-osm-app@workspace:packages/geo-io-osm-app"],
 
     "@moenarch/geo-io-osm-wasm": ["@moenarch/geo-io-osm-wasm@workspace:packages/geo-io-osm-wasm"],
+
+    "@moenarch/geo-viz-app": ["@moenarch/geo-viz-app@workspace:packages/geo-viz-app"],
+
+    "@moenarch/geo-viz-wasm": ["@moenarch/geo-viz-wasm@workspace:packages/geo-viz-wasm"],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

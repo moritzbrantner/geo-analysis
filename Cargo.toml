@@ -2,8 +2,11 @@
 members = [
     ".",
     "crates/moenarch-geo-core",
+    "crates/moenarch-maps-kernels-core",
     "crates/moenarch-geo-io-geojson",
     "crates/moenarch-geo-io-osm",
+    "crates/moenarch-geo-clustering",
+    "crates/moenarch-geo-viz",
     "crates/geo-core-cli",
     "crates/geo-core-server",
     "crates/geo-core-wasm",
@@ -13,6 +16,12 @@ members = [
     "crates/geo-io-osm-cli",
     "crates/geo-io-osm-server",
     "crates/geo-io-osm-wasm",
+    "crates/geo-clustering-cli",
+    "crates/geo-clustering-server",
+    "crates/geo-clustering-wasm",
+    "crates/geo-viz-cli",
+    "crates/geo-viz-server",
+    "crates/geo-viz-wasm",
 ]
 resolver = "2"
 
@@ -31,14 +40,18 @@ categories = ["science::geo", "data-structures", "algorithms"]
 clap = { version = "4.5.51", features = ["derive"] }
 base64 = "0.22.1"
 geo-core = { package = "moenarch-geo-core", version = "0.1.0", path = "crates/moenarch-geo-core" }
+geo-clustering = { package = "moenarch-geo-clustering", version = "0.1.0", path = "crates/moenarch-geo-clustering" }
 geo-io-geojson = { package = "moenarch-geo-io-geojson", version = "0.1.0", path = "crates/moenarch-geo-io-geojson" }
 geo-io-osm = { package = "moenarch-geo-io-osm", version = "0.1.0", path = "crates/moenarch-geo-io-osm" }
+geo-viz = { package = "moenarch-geo-viz", version = "0.1.0", path = "crates/moenarch-geo-viz" }
 geojson = "1"
 js-sys = "0.3.82"
+maps-kernels-core = { package = "moenarch-maps-kernels-core", version = "0.1.0", path = "crates/moenarch-maps-kernels-core" }
 osmpbfreader = "0.16"
 protobuf = "2"
 redb = "4.1"
 regex = "1"
+rstar = "0.13"
 runtime-core = { package = "moritzbrantner-runtime-core", version = "0.2.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
@@ -63,7 +76,10 @@ name = "geo_analysis"
 
 [dependencies]
 geo-core.workspace = true
+geo-clustering.workspace = true
 geo-io-geojson.workspace = true
 geo-io-osm.workspace = true
+geo-viz.workspace = true
+maps-kernels-core.workspace = true
 runtime-core.workspace = true
 serde_json.workspace = true

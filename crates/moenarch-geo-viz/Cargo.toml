@@ -1,0 +1,26 @@
+[package]
+name = "moenarch-geo-viz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Renderer-agnostic geographic visualization indexes for maps."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/moenarch-geo-viz"
+keywords = ["geo", "geospatial", "maps", "visualization"]
+categories = ["science::geo", "visualization", "algorithms"]
+
+[lib]
+name = "geo_viz"
+
+[dependencies]
+runtime-core.workspace = true
+geo-clustering.workspace = true
+geo-core.workspace = true
+geo-io-geojson.workspace = true
+maps-kernels-core.workspace = true
+rstar.workspace = true
+serde.workspace = true
+serde_json.workspace = true
