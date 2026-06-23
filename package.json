@@ -1,0 +1,15 @@
+{
+  "name": "@moenarch/geo-analysis",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun --filter @moenarch/geo-core-wasm test",
+    "build": "bun --filter @moenarch/geo-core-wasm build && bun --filter @moenarch/geo-core-app build",
+    "typecheck": "bun --filter @moenarch/geo-core-app typecheck"
+  }
+}

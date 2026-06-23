@@ -1,0 +1,6 @@
+/target/
+/.cargo-target/
+node_modules/
+/packages/*/node_modules/
+/packages/geo-core-wasm/pkg/
+/packages/geo-core-app/dist/
