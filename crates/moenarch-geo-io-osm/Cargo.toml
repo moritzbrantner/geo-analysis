@@ -1,0 +1,37 @@
+[package]
+name = "moenarch-geo-io-osm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "OpenStreetMap PBF import adapters for geo-core domain types."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/moenarch-geo-io-osm"
+keywords = ["geo", "geospatial", "osm", "openstreetmap"]
+categories = ["science::geo", "parser-implementations", "encoding"]
+
+[lib]
+name = "geo_io_osm"
+
+[features]
+default = []
+disk-index = ["dep:redb", "dep:tempfile"]
+geo-types = ["dep:geo-types"]
+
+[dependencies]
+runtime-core.workspace = true
+base64.workspace = true
+geo-core.workspace = true
+geo-io-geojson.workspace = true
+geo-types = { version = "0.7", optional = true }
+osmpbfreader.workspace = true
+redb = { workspace = true, optional = true }
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+protobuf.workspace = true

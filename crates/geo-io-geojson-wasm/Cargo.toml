@@ -1,0 +1,24 @@
+[package]
+name = "moenarch-geo-io-geojson-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "WASM bindings for geo-io-geojson."
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/moenarch-geo-io-geojson"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "geo_io_geojson_wasm"
+
+[dependencies]
+geo-io-geojson.workspace = true
+js-sys.workspace = true
+runtime-core.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true

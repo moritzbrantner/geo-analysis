@@ -1,0 +1,25 @@
+[package]
+name = "moenarch-geo-io-geojson-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Command-line adapter for the geo-io-geojson library crate."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/moenarch-geo-io-geojson"
+publish = false
+
+[lib]
+name = "geo_io_geojson_cli"
+
+[[bin]]
+name = "geo-io-geojson-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+geo-io-geojson.workspace = true
+runtime-core.workspace = true
+serde_json.workspace = true

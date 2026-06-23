@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "bun --filter @moenarch/geo-core-wasm test",
-    "build": "bun --filter @moenarch/geo-core-wasm build && bun --filter @moenarch/geo-core-app build",
-    "typecheck": "bun --filter @moenarch/geo-core-app typecheck"
+    "test": "bun --filter '@moenarch/*-wasm' test",
+    "build": "bun --filter '@moenarch/*-wasm' build && bun --filter '@moenarch/*-app' build",
+    "typecheck": "bun --filter '@moenarch/*-app' typecheck"
   }
 }
