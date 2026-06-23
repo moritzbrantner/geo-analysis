@@ -2,5 +2,5 @@
 /.cargo-target/
 node_modules/
 /packages/*/node_modules/
-/packages/geo-core-wasm/pkg/
-/packages/geo-core-app/dist/
+/packages/*-wasm/pkg/
+/packages/*-app/dist/
