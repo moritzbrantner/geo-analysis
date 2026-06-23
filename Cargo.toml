@@ -1,0 +1,50 @@
+[workspace]
+members = [
+    ".",
+    "crates/moenarch-geo-core",
+    "crates/geo-core-cli",
+    "crates/geo-core-server",
+    "crates/geo-core-wasm",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+repository = "https://github.com/moritzbrantner/geo-analysis"
+homepage = "https://github.com/moritzbrantner/geo-analysis"
+documentation = "https://docs.rs/moenarch-geo-core"
+keywords = ["geo", "geospatial", "geometry", "maps"]
+categories = ["science::geo", "data-structures", "algorithms"]
+
+[workspace.dependencies]
+clap = { version = "4.5.51", features = ["derive"] }
+geo-core = { package = "moenarch-geo-core", version = "0.1.0", path = "crates/moenarch-geo-core" }
+js-sys = "0.3.82"
+runtime-core = { package = "moritzbrantner-runtime-core", version = "0.2.0" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde-wasm-bindgen = "0.6.5"
+serde_json = "1.0.150"
+wasm-bindgen = "0.2.105"
+
+[package]
+name = "geo-analysis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Workspace facade for the extracted moenarch geo-analysis package family."
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+publish = false
+
+[lib]
+name = "geo_analysis"
+
+[dependencies]
+geo-core.workspace = true
+runtime-core.workspace = true
+serde_json.workspace = true
