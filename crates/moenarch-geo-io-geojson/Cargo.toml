@@ -1,0 +1,23 @@
+[package]
+name = "moenarch-geo-io-geojson"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "GeoJSON I/O adapters for geo-core domain types."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/moenarch-geo-io-geojson"
+keywords = ["geo", "geospatial", "geojson", "maps"]
+categories = ["science::geo", "parser-implementations", "encoding"]
+
+[lib]
+name = "geo_io_geojson"
+
+[dependencies]
+runtime-core.workspace = true
+geo-core.workspace = true
+geojson.workspace = true
+serde.workspace = true
+serde_json.workspace = true

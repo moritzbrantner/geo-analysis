@@ -1,0 +1,25 @@
+[package]
+name = "moenarch-geo-io-osm-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Command-line adapter for the geo-io-osm library crate."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/moenarch-geo-io-osm"
+publish = false
+
+[lib]
+name = "geo_io_osm_cli"
+
+[[bin]]
+name = "geo-io-osm-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+geo-io-osm.workspace = true
+runtime-core.workspace = true
+serde_json.workspace = true

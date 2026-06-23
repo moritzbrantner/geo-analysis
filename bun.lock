@@ -28,6 +28,52 @@
       "name": "@moenarch/geo-core-wasm",
       "version": "0.1.0",
     },
+    "packages/geo-io-geojson-app": {
+      "name": "@moenarch/geo-io-geojson-app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@moenarch/geo-io-geojson-wasm": "workspace:*",
+        "@vitejs/plugin-react": "^5.1.2",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "vite": "^7.3.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "autoprefixer": "^10.4.23",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.18",
+        "typescript": "^6.0.2",
+      },
+    },
+    "packages/geo-io-geojson-wasm": {
+      "name": "@moenarch/geo-io-geojson-wasm",
+      "version": "0.1.0",
+    },
+    "packages/geo-io-osm-app": {
+      "name": "@moenarch/geo-io-osm-app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@moenarch/geo-io-osm-wasm": "workspace:*",
+        "@vitejs/plugin-react": "^5.1.2",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "vite": "^7.3.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "autoprefixer": "^10.4.23",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.18",
+        "typescript": "^6.0.2",
+      },
+    },
+    "packages/geo-io-osm-wasm": {
+      "name": "@moenarch/geo-io-osm-wasm",
+      "version": "0.1.0",
+    },
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
@@ -135,6 +181,14 @@
     "@moenarch/geo-core-app": ["@moenarch/geo-core-app@workspace:packages/geo-core-app"],
 
     "@moenarch/geo-core-wasm": ["@moenarch/geo-core-wasm@workspace:packages/geo-core-wasm"],
+
+    "@moenarch/geo-io-geojson-app": ["@moenarch/geo-io-geojson-app@workspace:packages/geo-io-geojson-app"],
+
+    "@moenarch/geo-io-geojson-wasm": ["@moenarch/geo-io-geojson-wasm@workspace:packages/geo-io-geojson-wasm"],
+
+    "@moenarch/geo-io-osm-app": ["@moenarch/geo-io-osm-app@workspace:packages/geo-io-osm-app"],
+
+    "@moenarch/geo-io-osm-wasm": ["@moenarch/geo-io-osm-wasm@workspace:packages/geo-io-osm-wasm"],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
