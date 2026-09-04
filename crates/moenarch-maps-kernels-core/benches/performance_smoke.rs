@@ -1,5 +1,5 @@
 use iai_callgrind::{
-    Callgrind, EventKind, LibraryBenchmarkConfig, library_benchmark, library_benchmark_group, main,
+    library_benchmark, library_benchmark_group, main, Callgrind, EventKind, LibraryBenchmarkConfig,
 };
 use maps_kernels_core::{resample_line_flat, simplify_line_flat};
 use std::hint::black_box;
