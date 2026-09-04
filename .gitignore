@@ -1,5 +1,6 @@
 /target/
 /.cargo-target/
+/.artifacts/
 node_modules/
 /packages/*/node_modules/
 /packages/*-wasm/pkg/
