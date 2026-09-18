@@ -5,6 +5,7 @@ pub mod surface;
 use std::collections::BTreeMap;
 
 use geo_core::{BBox, Coordinate, GeoError, Result};
+use rstar::{RTree, RTreeObject, AABB};
 use serde::{Deserialize, Serialize};
 
 fn invalid_argument(message: impl Into<String>) -> GeoError {
@@ -75,6 +76,8 @@ impl Default for ClusterOptions {
 #[derive(Debug, Clone)]
 pub struct ClusterIndex<Properties = ()> {
     points: Vec<ClusterPoint<Properties>>,
+    spatial_index: RTree<SpatialPoint>,
+    bounds: Option<ClusterBounds>,
     options: ClusterOptions,
 }
 
@@ -96,8 +99,24 @@ impl<Properties: Clone> ClusterIndex<Properties> {
             .into_iter()
             .map(validate_point)
             .collect::<Result<Vec<_>>>()?;
+        let bounds = bounds_for_points(&points);
+        let spatial_index = RTree::bulk_load(
+            points
+                .iter()
+                .enumerate()
+                .map(|(point_index, point)| SpatialPoint {
+                    point: [point.longitude, point.latitude],
+                    point_index,
+                })
+                .collect(),
+        );
 
-        Ok(Self { points, options })
+        Ok(Self {
+            points,
+            spatial_index,
+            bounds,
+            options,
+        })
     }
 
     /// Returns clusters or points visible in a bounding box at a zoom level.
@@ -107,11 +126,38 @@ impl<Properties: Clone> ClusterIndex<Properties> {
         zoom: u8,
     ) -> Result<Vec<ClusterItem<Properties>>> {
         validate_bounds(bounds)?;
-        let visible = self
-            .points
-            .iter()
-            .filter(|point| point_in_bounds(point.longitude, point.latitude, bounds))
-            .cloned()
+        let mut visible_indexes = Vec::new();
+        if bounds[0] <= bounds[2] {
+            visible_indexes.extend(
+                self.spatial_index
+                    .locate_in_envelope_intersecting(&AABB::from_corners(
+                        [bounds[0], bounds[1]],
+                        [bounds[2], bounds[3]],
+                    ))
+                    .map(|point| point.point_index),
+            );
+        } else {
+            visible_indexes.extend(
+                self.spatial_index
+                    .locate_in_envelope_intersecting(&AABB::from_corners(
+                        [bounds[0], bounds[1]],
+                        [180.0, bounds[3]],
+                    ))
+                    .map(|point| point.point_index),
+            );
+            visible_indexes.extend(
+                self.spatial_index
+                    .locate_in_envelope_intersecting(&AABB::from_corners(
+                        [-180.0, bounds[1]],
+                        [bounds[2], bounds[3]],
+                    ))
+                    .map(|point| point.point_index),
+            );
+        }
+        visible_indexes.sort_unstable();
+        let visible = visible_indexes
+            .into_iter()
+            .map(|point_index| self.points[point_index].clone())
             .collect::<Vec<_>>();
 
         if zoom < self.options.min_zoom || zoom >= self.options.max_zoom {
@@ -144,20 +190,7 @@ impl<Properties: Clone> ClusterIndex<Properties> {
 
     /// Returns bounds for all indexed points.
     pub fn get_bounds(&self) -> Option<ClusterBounds> {
-        let first = self.points.first()?;
-        let mut west = first.longitude;
-        let mut south = first.latitude;
-        let mut east = first.longitude;
-        let mut north = first.latitude;
-
-        for point in self.points.iter().skip(1) {
-            west = west.min(point.longitude);
-            south = south.min(point.latitude);
-            east = east.max(point.longitude);
-            north = north.max(point.latitude);
-        }
-
-        Some([west, south, east, north])
+        self.bounds
     }
 
     /// Returns source points represented by a cluster id from this index.
@@ -184,6 +217,20 @@ impl<Properties: Clone> ClusterIndex<Properties> {
         parse_cluster_id(cluster_id)
             .map(|(x, _)| usize::from((x.zoom + 1).min(self.options.max_zoom)))
             .unwrap_or_else(|| usize::from(self.options.max_zoom))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SpatialPoint {
+    point: [f64; 2],
+    point_index: usize,
+}
+
+impl RTreeObject for SpatialPoint {
+    type Envelope = AABB<[f64; 2]>;
+
+    fn envelope(&self) -> Self::Envelope {
+        AABB::from_point(self.point)
     }
 }
 
@@ -222,14 +269,21 @@ fn validate_bounds(bounds: ClusterBounds) -> Result<()> {
     Ok(())
 }
 
-fn point_in_bounds(longitude: f64, latitude: f64, bounds: ClusterBounds) -> bool {
-    let longitude_visible = if bounds[0] <= bounds[2] {
-        longitude >= bounds[0] && longitude <= bounds[2]
-    } else {
-        longitude >= bounds[0] || longitude <= bounds[2]
-    };
+fn bounds_for_points<Properties>(points: &[ClusterPoint<Properties>]) -> Option<ClusterBounds> {
+    let first = points.first()?;
+    let mut west = first.longitude;
+    let mut south = first.latitude;
+    let mut east = first.longitude;
+    let mut north = first.latitude;
 
-    longitude_visible && latitude >= bounds[1] && latitude <= bounds[3]
+    for point in points.iter().skip(1) {
+        west = west.min(point.longitude);
+        south = south.min(point.latitude);
+        east = east.max(point.longitude);
+        north = north.max(point.latitude);
+    }
+
+    Some([west, south, east, north])
 }
 
 fn cell_size_degrees(zoom: u8, options: ClusterOptions) -> f64 {
@@ -373,5 +427,53 @@ mod tests {
         let items = index.get_clusters([12.0, 51.0, 14.0, 53.0], 16).unwrap();
 
         assert_eq!(items, vec![ClusterItem::Point(point("a", 13.0, 52.0))]);
+    }
+
+    #[test]
+    fn spatial_query_preserves_source_order() {
+        let index = ClusterIndex::new(
+            [
+                point("first", 13.4, 52.4),
+                point("outside", 80.0, 0.0),
+                point("second", 13.2, 52.2),
+            ],
+            ClusterOptions::default(),
+        )
+        .unwrap();
+
+        let items = index.get_clusters([13.0, 52.0, 14.0, 53.0], 16).unwrap();
+
+        assert_eq!(
+            items,
+            vec![
+                ClusterItem::Point(point("first", 13.4, 52.4)),
+                ClusterItem::Point(point("second", 13.2, 52.2)),
+            ]
+        );
+    }
+
+    #[test]
+    fn spatial_query_supports_antimeridian_bounds() {
+        let index = ClusterIndex::new(
+            [
+                point("east", 179.5, 1.0),
+                point("middle", 0.0, 1.0),
+                point("west", -179.5, 1.0),
+            ],
+            ClusterOptions::default(),
+        )
+        .unwrap();
+
+        let items = index
+            .get_clusters([170.0, -5.0, -170.0, 5.0], 16)
+            .unwrap();
+
+        assert_eq!(
+            items,
+            vec![
+                ClusterItem::Point(point("east", 179.5, 1.0)),
+                ClusterItem::Point(point("west", -179.5, 1.0)),
+            ]
+        );
     }
 }
