@@ -586,7 +586,7 @@ dependencies = [
  "iai-callgrind",
  "moenarch-geo-core",
  "moritzbrantner-runtime-core",
- "rstar",
+ "rstar 0.13.0",
  "serde",
  "serde_json",
 ]
