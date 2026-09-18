@@ -20,7 +20,7 @@ jobs:
     with:
       operation: run
       tier: fast
-      component: "."
+      component: "geo-analysis"
       report_path: .artifacts/coding-tooling/fast.json
 
   performance-smoke:
