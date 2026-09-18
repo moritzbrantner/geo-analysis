@@ -130,7 +130,7 @@ impl<Properties: Clone> ClusterIndex<Properties> {
         if bounds[0] <= bounds[2] {
             visible_indexes.extend(
                 self.spatial_index
-                    .locate_in_envelope_intersecting(&AABB::from_corners(
+                    .locate_in_envelope_intersecting(AABB::from_corners(
                         [bounds[0], bounds[1]],
                         [bounds[2], bounds[3]],
                     ))
@@ -139,7 +139,7 @@ impl<Properties: Clone> ClusterIndex<Properties> {
         } else {
             visible_indexes.extend(
                 self.spatial_index
-                    .locate_in_envelope_intersecting(&AABB::from_corners(
+                    .locate_in_envelope_intersecting(AABB::from_corners(
                         [bounds[0], bounds[1]],
                         [180.0, bounds[3]],
                     ))
@@ -147,7 +147,7 @@ impl<Properties: Clone> ClusterIndex<Properties> {
             );
             visible_indexes.extend(
                 self.spatial_index
-                    .locate_in_envelope_intersecting(&AABB::from_corners(
+                    .locate_in_envelope_intersecting(AABB::from_corners(
                         [-180.0, bounds[1]],
                         [bounds[2], bounds[3]],
                     ))
