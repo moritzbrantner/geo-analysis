@@ -51,10 +51,10 @@ if [[ -n "$base_sha" ]] && git cat-file -e "$base_sha:$bench_path" 2>/dev/null; 
   (
     cd "$baseline_dir"
     CARGO_TARGET_DIR="$target_dir" \
-      cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- --save-baseline=pr-base
+      cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- --save-baseline=pr_base
   ) 2>&1 | tee "$artifact_dir/baseline.log"
 
-  run_benchmark candidate.log --baseline=pr-base
+  run_benchmark candidate.log --baseline=pr_base
 else
   printf '%s\n' \
     'No compatible base benchmark exists; this run seeds the performance-smoke contract.' \
