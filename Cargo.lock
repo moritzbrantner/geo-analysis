@@ -765,6 +765,7 @@ dependencies = [
 name = "moenarch-geo-viz"
 version = "0.1.0"
 dependencies = [
+ "iai-callgrind",
  "moenarch-geo-clustering",
  "moenarch-geo-core",
  "moenarch-geo-io-geojson",
