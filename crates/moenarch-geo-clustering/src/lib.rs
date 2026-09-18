@@ -464,9 +464,7 @@ mod tests {
         )
         .unwrap();
 
-        let items = index
-            .get_clusters([170.0, -5.0, -170.0, 5.0], 16)
-            .unwrap();
+        let items = index.get_clusters([170.0, -5.0, -170.0, 5.0], 16).unwrap();
 
         assert_eq!(
             items,
