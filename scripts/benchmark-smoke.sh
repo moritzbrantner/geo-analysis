@@ -26,18 +26,19 @@ mkdir -p "$artifact_dir" "$target_dir"
   uname -srm
 } > "$artifact_dir/fingerprint.txt"
 
-run_benchmark() {
-  local log="$1"
-  shift
+run_candidate() {
+  local package="$1"
+  local bench="$2"
+  local log="$3"
+  shift 3
   CARGO_TARGET_DIR="$target_dir" \
-    cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- "$@" \
+    cargo bench -p "$package" --bench "$bench" --locked -- "$@" \
     2>&1 | tee "$artifact_dir/$log"
 }
 
 base_sha="${PERF_BASE_SHA:-}"
-bench_path="crates/moenarch-maps-kernels-core/benches/performance_smoke.rs"
-
-if [[ -n "$base_sha" ]] && git cat-file -e "$base_sha:$bench_path" 2>/dev/null; then
+baseline_dir=""
+if [[ -n "$base_sha" ]]; then
   worktree_parent="$(mktemp -d)"
   baseline_dir="$worktree_parent/base"
 
@@ -48,16 +49,47 @@ if [[ -n "$base_sha" ]] && git cat-file -e "$base_sha:$bench_path" 2>/dev/null; 
   trap cleanup EXIT
 
   git worktree add --detach "$baseline_dir" "$base_sha" >/dev/null
+fi
+
+run_baseline() {
+  local package="$1"
+  local bench="$2"
+  local log="$3"
+  shift 3
   (
     cd "$baseline_dir"
     CARGO_TARGET_DIR="$target_dir" \
-      cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- --save-baseline=pr_base
-  ) 2>&1 | tee "$artifact_dir/baseline.log"
+      cargo bench -p "$package" --bench "$bench" --locked -- "$@"
+  ) 2>&1 | tee "$artifact_dir/$log"
+}
 
-  run_benchmark candidate.log --baseline=pr_base
-else
-  printf '%s\n' \
-    'No compatible base benchmark exists; this run seeds the performance-smoke contract.' \
-    | tee "$artifact_dir/baseline.log"
-  run_benchmark candidate.log --save-baseline=seed
-fi
+benchmark_pair() {
+  local package="$1"
+  local bench="$2"
+  local bench_path="$3"
+  local baseline_log="$4"
+  local candidate_log="$5"
+
+  if [[ -n "$baseline_dir" ]] && git -C "$baseline_dir" cat-file -e "HEAD:$bench_path" 2>/dev/null; then
+    run_baseline "$package" "$bench" "$baseline_log" --save-baseline=pr_base
+    run_candidate "$package" "$bench" "$candidate_log" --baseline=pr_base
+  else
+    printf 'No compatible base benchmark exists for %s; seeding its performance contract.\n' "$package" \
+      | tee "$artifact_dir/$baseline_log"
+    run_candidate "$package" "$bench" "$candidate_log" --save-baseline=seed
+  fi
+}
+
+benchmark_pair \
+  moenarch-maps-kernels-core \
+  performance_smoke \
+  crates/moenarch-maps-kernels-core/benches/performance_smoke.rs \
+  baseline.log \
+  candidate.log
+
+benchmark_pair \
+  moenarch-geo-clustering \
+  performance_smoke \
+  crates/moenarch-geo-clustering/benches/performance_smoke.rs \
+  clustering-baseline.log \
+  clustering-candidate.log
