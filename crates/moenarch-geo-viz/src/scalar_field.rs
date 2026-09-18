@@ -825,10 +825,7 @@ mod tests {
     #[test]
     fn index_reuses_prepared_interpolator_without_retaining_raw_value_points() {
         let index = GeoVizScalarFieldIndex::new(
-            [
-                point("west", 0.0, 0.0, 10.0),
-                point("east", 2.0, 0.0, 20.0),
-            ],
+            [point("west", 0.0, 0.0, 10.0), point("east", 2.0, 0.0, 20.0)],
             GeoVizScalarFieldOptions {
                 domain_bounds: Some([0.0, -1.0, 2.0, 1.0]),
                 interpolation_k: Some(2),
