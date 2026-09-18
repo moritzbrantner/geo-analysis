@@ -1,0 +1,31 @@
+schema_version = 1
+
+[policy]
+track = "latest-stable"
+
+[system]
+apt = []
+
+[setup]
+commands = [
+  "rustup target add --toolchain 1.95.0 wasm32-unknown-unknown",
+  "if ! command -v wasm-pack >/dev/null 2>&1 || [[ \"$(wasm-pack --version | awk '{print $2}')\" != \"0.15.0\" ]]; then cargo install wasm-pack --version 0.15.0 --locked; fi",
+  "bun install --frozen-lockfile",
+]
+
+[maintenance]
+commands = [
+  "rustup target add --toolchain 1.95.0 wasm32-unknown-unknown",
+  "if ! command -v wasm-pack >/dev/null 2>&1 || [[ \"$(wasm-pack --version | awk '{print $2}')\" != \"0.15.0\" ]]; then cargo install wasm-pack --version 0.15.0 --locked; fi",
+  "bun install --frozen-lockfile",
+]
+
+[cache]
+paths = [
+  "~/.bun/install/cache",
+  "~/.cargo/registry",
+  "~/.cargo/git",
+  "target",
+]
+
+[compatibility_holds]
