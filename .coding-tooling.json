@@ -2,14 +2,68 @@
   "schemaVersion": 1,
   "profile": "repository-foundation-v1",
   "tiers": {
-    "fast": ["format:check", "lint", "build", "test:unit"],
-    "performance": ["benchmark:smoke"]
+    "fast": [
+      "format:check",
+      "lint",
+      "build",
+      "test:unit",
+      "test:integration"
+    ],
+    "performance": [
+      "benchmark:smoke"
+    ]
   },
-  "requiredCapabilities": ["format:check", "lint", "build", "test:unit"],
-  "optionalCapabilities": ["benchmark:smoke"],
+  "requiredCapabilities": [
+    "format:check",
+    "lint",
+    "build",
+    "test:unit",
+    "test:integration"
+  ],
+  "optionalCapabilities": [
+    "benchmark:smoke"
+  ],
   "capabilityCommands": {
     ".": {
-      "benchmark:smoke": ["bash", "scripts/benchmark-smoke.sh"]
+      "format:check": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "lint": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "build": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "test:unit": [
+        "cargo",
+        "test",
+        "--workspace",
+        "--lib",
+        "--tests",
+        "--locked"
+      ],
+      "test:integration": [
+        "bun",
+        "run",
+        "test:built"
+      ],
+      "benchmark:smoke": [
+        "bash",
+        "scripts/benchmark-smoke.sh"
+      ]
     }
   }
 }
