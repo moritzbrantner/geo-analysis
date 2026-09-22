@@ -20,7 +20,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-iai-callgrind = "0.16.1"
+iai-callgrind = "=0.16.1"
 
 [[bench]]
 name = "performance_smoke"
