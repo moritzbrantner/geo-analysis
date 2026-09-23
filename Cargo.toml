@@ -6,6 +6,7 @@ members = [
     "crates/moenarch-geo-io-geojson",
     "crates/moenarch-geo-io-osm",
     "crates/moenarch-geo-clustering",
+    "crates/moenarch-geo-grid",
     "crates/moenarch-geo-viz",
     "crates/geo-core-cli",
     "crates/geo-core-server",
@@ -41,10 +42,13 @@ clap = { version = "4.5.51", features = ["derive"] }
 base64 = "0.22.1"
 geo-core = { package = "moenarch-geo-core", version = "0.1.0", path = "crates/moenarch-geo-core" }
 geo-clustering = { package = "moenarch-geo-clustering", version = "0.1.0", path = "crates/moenarch-geo-clustering" }
+geo-grid = { package = "moenarch-geo-grid", version = "0.1.0", path = "crates/moenarch-geo-grid" }
 geo-io-geojson = { package = "moenarch-geo-io-geojson", version = "0.1.0", path = "crates/moenarch-geo-io-geojson" }
 geo-io-osm = { package = "moenarch-geo-io-osm", version = "0.1.0", path = "crates/moenarch-geo-io-osm" }
 geo-viz = { package = "moenarch-geo-viz", version = "0.1.0", path = "crates/moenarch-geo-viz" }
 geojson = "1"
+geo = "=0.33.0"
+h3o = { version = "=0.11.0", features = ["geo"] }
 js-sys = "0.3.82"
 maps-kernels-core = { package = "moenarch-maps-kernels-core", version = "0.1.0", path = "crates/moenarch-maps-kernels-core" }
 osmpbfreader = "0.16"
@@ -77,6 +81,7 @@ name = "geo_analysis"
 [dependencies]
 geo-core.workspace = true
 geo-clustering.workspace = true
+geo-grid.workspace = true
 geo-io-geojson.workspace = true
 geo-io-osm.workspace = true
 geo-viz.workspace = true
