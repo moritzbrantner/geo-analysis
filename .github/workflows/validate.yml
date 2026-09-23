@@ -48,7 +48,9 @@ jobs:
       - name: Run deterministic performance smoke
         env:
           PERF_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-        run: bash scripts/benchmark-smoke.sh
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          bash scripts/benchmark-smoke.sh
       - name: Upload performance evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
