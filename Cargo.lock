@@ -583,8 +583,10 @@ dependencies = [
 name = "moenarch-geo-clustering"
 version = "0.1.0"
 dependencies = [
+ "iai-callgrind",
  "moenarch-geo-core",
  "moritzbrantner-runtime-core",
+ "rstar 0.13.0",
  "serde",
  "serde_json",
 ]
