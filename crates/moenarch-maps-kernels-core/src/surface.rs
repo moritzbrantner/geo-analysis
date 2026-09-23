@@ -206,7 +206,10 @@ fn densify_line_value(request: DensifyRequest) -> Result<serde_json::Value, Stri
 
 fn validate_coordinates(coordinates: &[f64], closed: bool) -> Result<(), String> {
     if coordinates.len() > MAX_COORDINATES * 2 {
-        return Err(format!("coordinates must not exceed {}", MAX_COORDINATES * 2));
+        return Err(format!(
+            "coordinates must not exceed {}",
+            MAX_COORDINATES * 2
+        ));
     }
     if coordinates.len() < if closed { 6 } else { 4 } {
         return Err(if closed {

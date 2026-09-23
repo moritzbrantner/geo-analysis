@@ -250,7 +250,9 @@ fn validate_coordinate_count(coordinate_count: usize, minimum: usize) -> Result<
         )));
     }
     if coordinate_count > MAX_COORDINATE_COUNT {
-        return Err(invalid_argument("coordinate count exceeds addressable output size"));
+        return Err(invalid_argument(
+            "coordinate count exceeds addressable output size",
+        ));
     }
 
     Ok(())
