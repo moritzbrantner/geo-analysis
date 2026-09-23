@@ -281,3 +281,50 @@ fn dateline_cluster_centroid_stays_near_the_dateline() {
         cluster.longitude
     );
 }
+
+
+#[test]
+fn heat_summary_rejects_metric_overflow() {
+    let index = GeoPointIndex::new(
+        [
+            point(Some("a"), 13.0, 52.0, f64::MAX),
+            point(Some("b"), 14.0, 53.0, f64::MAX),
+        ],
+        GeoVizAggregationOptions::default(),
+    )
+    .expect("point index");
+
+    let error = index
+        .get_heat_features(
+            viewport(),
+            GeoVizHeatOptions {
+                radius_meters: None,
+                weight_metric: Some("weight".to_string()),
+            },
+        )
+        .expect_err("finite source metrics must not overflow the derived summary");
+
+    assert!(error.to_string().contains("finite numeric range"));
+}
+
+#[test]
+fn flow_aggregation_rejects_weight_overflow() {
+    let index = GeoFlowIndex::new([
+        flow("a", [13.0, 52.0], [14.0, 53.0], f64::MAX),
+        flow("b", [13.0, 52.0], [14.0, 53.0], f64::MAX),
+    ])
+    .expect("flow index");
+
+    let error = index
+        .get_viewport_flows(
+            viewport(),
+            GeoVizFlowOptions {
+                aggregate: GeoVizFlowAggregateMode::OriginDestination,
+                min_weight: None,
+                weight_metric: Some("weight".to_string()),
+            },
+        )
+        .expect_err("finite source weights must not overflow aggregated flow weight");
+
+    assert!(error.to_string().contains("finite numeric range"));
+}
