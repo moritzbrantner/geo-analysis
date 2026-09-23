@@ -27,6 +27,10 @@ Workflow operations:
 - `geoJson.bounds`: Computes bounds and coordinate counts for a GeoJSON document.
 - `geoJson.distance`: Computes haversine meters or planar coordinate-unit distance between lon/lat coordinates.
 - `geoJson.toGeoJson`: Converts the geo-core Geometry JSON shape into a GeoJSON geometry object.
+- `geoJson.toH3Cells`: Approximately covers GeoJSON geometry with canonical H3 cells.
+- `geoJson.fromH3Cells`: Dissolves H3 cells back into an approximate GeoJSON MultiPolygon.
+- `geoJson.toSquareCells`: Approximately covers GeoJSON geometry with Web-Mercator XYZ square cells.
+- `geoJson.fromSquareCells`: Reconstructs square cells as an approximate GeoJSON MultiPolygon.
 
 Debug operations:
 
