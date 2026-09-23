@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use geo_clustering::{ClusterIndex, ClusterOptions, ClusterPoint};
+use geo_clustering::{ClusterIndex, ClusterItem, ClusterOptions, ClusterPoint};
 use geo_viz::{
     GeoFlowIndex, GeoPointIndex, GeoVizAggregationOptions, GeoVizFlow, GeoVizFlowAggregateMode,
     GeoVizFlowOptions, GeoVizHeatOptions, GeoVizPoint, GeoVizViewportQuery,
@@ -240,4 +240,44 @@ fn viewport_queries_reject_non_finite_zoom() {
         .expect_err("non-finite zoom must not leak into output");
 
     assert!(error.to_string().contains("zoom"));
+}
+
+
+#[test]
+fn dateline_cluster_centroid_stays_near_the_dateline() {
+    let index = ClusterIndex::new(
+        [
+            ClusterPoint {
+                id: "west".to_string(),
+                longitude: -179.8,
+                latitude: 10.0,
+                properties: (),
+            },
+            ClusterPoint {
+                id: "east".to_string(),
+                longitude: 179.8,
+                latitude: 10.0,
+                properties: (),
+            },
+        ],
+        ClusterOptions::default(),
+    )
+    .expect("cluster index");
+
+    let items = index
+        .get_clusters([170.0, 0.0, -170.0, 20.0], 0)
+        .expect("dateline viewport");
+    let cluster = items
+        .iter()
+        .find_map(|item| match item {
+            ClusterItem::Cluster(cluster) => Some(cluster),
+            ClusterItem::Point(_) => None,
+        })
+        .expect("low zoom should cluster both dateline points");
+
+    assert!(
+        cluster.longitude.abs() > 170.0,
+        "centroid drifted away from dateline: {}",
+        cluster.longitude
+    );
 }
