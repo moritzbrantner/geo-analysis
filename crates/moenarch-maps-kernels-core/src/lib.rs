@@ -3,6 +3,10 @@
 pub mod surface;
 use std::fmt;
 
+// A flat coordinate contains two f64 values, and Vec allocations cannot exceed
+// isize::MAX bytes. Transport-specific budgets belong to the surface instead.
+const MAX_COORDINATE_COUNT: usize = isize::MAX as usize / (2 * std::mem::size_of::<f64>());
+
 /// Error type for deterministic map kernel validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MapsKernelError {
@@ -63,25 +67,21 @@ pub fn path_summary_flat(coordinates: &[f64], closed: bool) -> Result<PathSummar
     })
 }
 
-/// Resamples an open line represented as flat `[x0, y0, x1, y1, ...]` coordinates.
+/// Resamples an open line at equal arc-length intervals, even when the requested
+/// point count equals the source count. The first and last positions are retained.
 pub fn resample_line_flat(coordinates: &[f64], coordinate_count: usize) -> Result<Vec<f64>> {
     validate_flat_coordinates(coordinates, 2, "line coordinates")?;
     validate_coordinate_count(coordinate_count, 2)?;
 
     let source_count = coordinates.len() / 2;
-
-    if source_count == coordinate_count {
-        return Ok(coordinates.to_vec());
-    }
-
     let distances = cumulative_distances(coordinates, false)?;
     let total_distance = *distances.last().unwrap_or(&0.0);
 
     if total_distance == 0.0 {
-        return Ok(repeat_position(coordinates, coordinate_count));
+        return repeat_position(coordinates, coordinate_count);
     }
 
-    let mut samples = Vec::with_capacity(coordinate_count * 2);
+    let mut samples = coordinate_buffer(coordinate_count)?;
     let mut segment_index = 0;
 
     for index in 0..coordinate_count {
@@ -90,7 +90,9 @@ pub fn resample_line_flat(coordinates: &[f64], coordinate_count: usize) -> Resul
             continue;
         }
 
-        let target_distance = total_distance * index as f64 / (coordinate_count - 1) as f64;
+        // Normalize first: total_distance * index can overflow even when every
+        // target distance and the final interpolated coordinates are finite.
+        let target_distance = total_distance * (index as f64 / (coordinate_count - 1) as f64);
         let sample = interpolate_along_path_from_segment(
             coordinates,
             &distances,
@@ -115,14 +117,14 @@ pub fn resample_ring_flat(open_ring: &[f64], coordinate_count: usize) -> Result<
     let total_distance = *distances.last().unwrap_or(&0.0);
 
     if total_distance == 0.0 {
-        return Ok(repeat_position(open_ring, coordinate_count));
+        return repeat_position(open_ring, coordinate_count);
     }
 
-    let mut samples = Vec::with_capacity(coordinate_count * 2);
+    let mut samples = coordinate_buffer(coordinate_count)?;
     let mut segment_index = 0;
 
     for index in 0..coordinate_count {
-        let target_distance = total_distance * index as f64 / coordinate_count as f64;
+        let target_distance = total_distance * (index as f64 / coordinate_count as f64);
         let sample = interpolate_along_path_from_segment(
             open_ring,
             &distances,
@@ -166,7 +168,18 @@ pub fn simplify_line_flat(coordinates: &[f64], tolerance: f64) -> Result<Vec<f64
 }
 
 /// Inserts evenly spaced points so every open-line segment is at most `max_segment_length`.
+/// Original vertices are copied exactly. Unrepresentable output sizes are errors.
 pub fn densify_line_flat(coordinates: &[f64], max_segment_length: f64) -> Result<Vec<f64>> {
+    densify_line_flat_with_limit(coordinates, max_segment_length, MAX_COORDINATE_COUNT)
+}
+
+// The surface supplies its existing point budget here. Check the entire output
+// in O(input points) before allocating or doing work proportional to that output.
+pub(crate) fn densify_line_flat_with_limit(
+    coordinates: &[f64],
+    max_segment_length: f64,
+    max_coordinate_count: usize,
+) -> Result<Vec<f64>> {
     validate_flat_coordinates(coordinates, 2, "line coordinates")?;
     if !max_segment_length.is_finite() || max_segment_length <= 0.0 {
         return Err(invalid_argument(
@@ -174,20 +187,42 @@ pub fn densify_line_flat(coordinates: &[f64], max_segment_length: f64) -> Result
         ));
     }
 
-    let point_count = coordinates.len() / 2;
-    let mut output = Vec::with_capacity(coordinates.len());
+    let limit = max_coordinate_count.min(MAX_COORDINATE_COUNT);
+    let mut output_count = 1_usize;
+    for segment in coordinates.windows(4).step_by(2) {
+        let pieces = subdivision_count(segment, max_segment_length)?;
+        output_count = output_count
+            .checked_add(pieces)
+            .filter(|count| *count <= limit)
+            .ok_or_else(|| invalid_argument("generated coordinate count exceeds output limit"))?;
+    }
+
+    let mut output = coordinate_buffer(output_count)?;
     output.extend_from_slice(&coordinates[0..2]);
-    for index in 0..point_count - 1 {
-        let start = position_at(coordinates, index);
-        let end = position_at(coordinates, index + 1);
-        let length = distance(start, end);
-        let pieces = (length / max_segment_length).ceil().max(1.0) as usize;
-        for piece in 1..=pieces {
+    for segment in coordinates.windows(4).step_by(2) {
+        let start = [segment[0], segment[1]];
+        let end = [segment[2], segment[3]];
+        let pieces = subdivision_count(segment, max_segment_length)?;
+        for piece in 1..pieces {
             let progress = piece as f64 / pieces as f64;
             output.extend_from_slice(&interpolate_position(start, end, progress));
         }
+        // Evaluating start + (end - start) at t=1 can lose the endpoint through
+        // cancellation. Densification must retain every original vertex exactly.
+        output.extend_from_slice(&end);
     }
     Ok(output)
+}
+
+fn subdivision_count(segment: &[f64], max_segment_length: f64) -> Result<usize> {
+    let length = distance([segment[0], segment[1]], [segment[2], segment[3]]);
+    let pieces = (length / max_segment_length).ceil().max(1.0);
+    if !length.is_finite() || !pieces.is_finite() || pieces >= MAX_COORDINATE_COUNT as f64 {
+        return Err(invalid_argument(
+            "requested densification exceeds finite, addressable output size",
+        ));
+    }
+    Ok(pieces as usize)
 }
 
 fn validate_flat_coordinates(coordinates: &[f64], min_points: usize, label: &str) -> Result<()> {
@@ -214,15 +249,36 @@ fn validate_coordinate_count(coordinate_count: usize, minimum: usize) -> Result<
             "coordinate count must be at least {minimum}"
         )));
     }
+    if coordinate_count > MAX_COORDINATE_COUNT {
+        return Err(invalid_argument("coordinate count exceeds addressable output size"));
+    }
 
     Ok(())
 }
 
+fn coordinate_buffer(coordinate_count: usize) -> Result<Vec<f64>> {
+    let value_count = coordinate_count
+        .checked_mul(2)
+        .ok_or_else(|| invalid_argument("coordinate count exceeds addressable output size"))?;
+    let mut buffer = Vec::new();
+    buffer
+        .try_reserve_exact(value_count)
+        .map_err(|_| invalid_argument("unable to reserve requested coordinate output"))?;
+    Ok(buffer)
+}
+
 fn path_length_flat(coordinates: &[f64], closed: bool) -> Result<f64> {
-    Ok(cumulative_distances(coordinates, closed)?
-        .last()
-        .copied()
-        .unwrap_or(0.0))
+    let point_count = coordinates.len() / 2;
+    let segment_count = if closed { point_count } else { point_count - 1 };
+    let mut length = 0.0;
+    for index in 0..segment_count {
+        length = add_segment_distance(
+            length,
+            position_at(coordinates, index),
+            position_at(coordinates, (index + 1) % point_count),
+        )?;
+    }
+    Ok(length)
 }
 
 fn bounds_flat(coordinates: &[f64]) -> [f64; 4] {
@@ -239,6 +295,14 @@ fn bounds_flat(coordinates: &[f64]) -> [f64; 4] {
     [min_x, min_y, max_x, max_y]
 }
 
+fn add_segment_distance(previous: f64, start: [f64; 2], end: [f64; 2]) -> Result<f64> {
+    let total = previous + distance(start, end);
+    if !total.is_finite() {
+        return Err(invalid_argument("total path length must be finite"));
+    }
+    Ok(total)
+}
+
 fn cumulative_distances(coordinates: &[f64], closed: bool) -> Result<Vec<f64>> {
     let point_count = coordinates.len() / 2;
     let segment_count = if closed { point_count } else { point_count - 1 };
@@ -251,7 +315,7 @@ fn cumulative_distances(coordinates: &[f64], closed: bool) -> Result<Vec<f64>> {
         let end = position_at(coordinates, (index + 1) % point_count);
         let previous_distance = *distances.last().unwrap_or(&0.0);
 
-        distances.push(previous_distance + distance(start, end));
+        distances.push(add_segment_distance(previous_distance, start, end)?);
     }
 
     Ok(distances)
@@ -313,15 +377,15 @@ fn clamp_finite(value: f64, min: f64, max: f64) -> Result<f64> {
     Ok(value.clamp(min, max))
 }
 
-fn repeat_position(coordinates: &[f64], coordinate_count: usize) -> Vec<f64> {
+fn repeat_position(coordinates: &[f64], coordinate_count: usize) -> Result<Vec<f64>> {
     let position = &coordinates[0..2];
-    let mut samples = Vec::with_capacity(coordinate_count * 2);
+    let mut samples = coordinate_buffer(coordinate_count)?;
 
     for _ in 0..coordinate_count {
         samples.extend_from_slice(position);
     }
 
-    samples
+    Ok(samples)
 }
 
 fn position_at(coordinates: &[f64], index: usize) -> [f64; 2] {
