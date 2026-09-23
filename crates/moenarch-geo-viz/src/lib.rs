@@ -490,7 +490,7 @@ impl GeoPointIndex {
             .collect::<Vec<_>>();
 
         Ok(GeoVizAggregation {
-            summary: summarize_features(query, &features, &self.metric_keys),
+            summary: summarize_features(query, &features, &self.metric_keys)?,
             features,
         })
     }
@@ -530,14 +530,16 @@ impl GeoPointIndex {
             })
             .collect::<Vec<_>>();
 
+        let metrics = sum_metrics(
+            features.iter().map(|feature| &feature.metrics),
+            &self.metric_keys,
+        )?;
+
         Ok(GeoVizHeatAggregation {
             summary: GeoVizHeatSummary {
                 bounds: query.bounds,
                 zoom: query.zoom,
-                metrics: sum_metrics(
-                    features.iter().map(|feature| &feature.metrics),
-                    &self.metric_keys,
-                ),
+                metrics,
                 max_weight,
                 visible_point_count: features.len(),
             },
@@ -605,7 +607,7 @@ impl GeoPointIndex {
                 let point_count_abbreviated = abbreviate_count(point_count);
                 let leaves = self.get_cluster_leaves(&cluster_id, point_count, 0);
                 let metrics =
-                    sum_metrics(leaves.iter().map(|point| &point.metrics), &self.metric_keys);
+                    sum_metrics(leaves.iter().map(|point| &point.metrics), &self.metric_keys)?;
 
                 Ok(Some(GeoVizAggregationFeature::Cluster {
                     expansion_zoom: self.get_cluster_expansion_zoom(&cluster_id),
@@ -701,7 +703,7 @@ impl GeoFlowIndex {
             .collect::<Vec<_>>();
 
         if options.aggregate != GeoVizFlowAggregateMode::None {
-            weighted = aggregate_flows(weighted, &self.metric_keys);
+            weighted = aggregate_flows(weighted, &self.metric_keys)?;
         }
 
         let max_weight = maximum_weight(&weighted);
@@ -714,15 +716,17 @@ impl GeoFlowIndex {
             })
             .collect::<Vec<_>>();
 
+        let metrics = sum_metrics(
+            features.iter().map(|feature| &feature.flow.metrics),
+            &self.metric_keys,
+        )?;
+
         Ok(GeoVizFlowAggregation {
             summary: GeoVizFlowSummary {
                 bounds: bounds_for_flows(features.iter().map(|feature| &feature.flow)),
                 viewport_bounds: query.bounds,
                 zoom: query.zoom,
-                metrics: sum_metrics(
-                    features.iter().map(|feature| &feature.flow.metrics),
-                    &self.metric_keys,
-                ),
+                metrics,
                 max_weight,
                 visible_flow_count: features.len(),
             },
@@ -1091,7 +1095,7 @@ fn canonical_coordinate_bits(value: f64) -> u64 {
 fn aggregate_flows(
     weighted: Vec<(GeoVizIndexedFlow, f64)>,
     metric_keys: &[String],
-) -> Vec<(GeoVizIndexedFlow, f64)> {
+) -> Result<Vec<(GeoVizIndexedFlow, f64)>> {
     let mut grouped =
         BTreeMap::<(u64, u64, u64, u64), (GeoVizIndexedFlow, f64)>::new();
 
@@ -1112,43 +1116,61 @@ fn aggregate_flows(
             flow.metrics = metric_keys.iter().map(|key| (key.clone(), 0.0)).collect();
             (flow, 0.0)
         });
-        entry.1 += raw_weight;
-        for key in metric_keys {
-            *entry.0.metrics.entry(key.clone()).or_insert(0.0) +=
-                flow.metrics.get(key).copied().unwrap_or(0.0);
-        }
+        entry.1 = finite_sum(entry.1, raw_weight, "aggregated flow weight")?;
+        accumulate_metrics(&mut entry.0.metrics, &flow.metrics, metric_keys)?;
     }
 
-    grouped.into_values().collect()
+    Ok(grouped.into_values().collect())
 }
 
 fn default_clip_to_viewport() -> bool {
     true
 }
 
+fn finite_sum(left: f64, right: f64, label: &str) -> Result<f64> {
+    let sum = left + right;
+    if !sum.is_finite() {
+        return Err(invalid_argument(format!(
+            "{label} exceeds the finite numeric range"
+        )));
+    }
+    Ok(sum)
+}
+
+fn accumulate_metrics(
+    target: &mut GeoVizMetricRecord,
+    source: &GeoVizMetricRecord,
+    metric_keys: &[String],
+) -> Result<()> {
+    for key in metric_keys {
+        let value = source.get(key).copied().unwrap_or(0.0);
+        let total = target.entry(key.clone()).or_insert(0.0);
+        *total = finite_sum(*total, value, "metric accumulation")?;
+    }
+    Ok(())
+}
+
 fn sum_metrics<'a>(
     records: impl IntoIterator<Item = &'a GeoVizMetricRecord>,
     metric_keys: &[String],
-) -> GeoVizMetricRecord {
+) -> Result<GeoVizMetricRecord> {
     let mut metrics = metric_keys
         .iter()
         .map(|key| (key.clone(), 0.0))
         .collect::<GeoVizMetricRecord>();
 
     for record in records {
-        for key in metric_keys {
-            *metrics.entry(key.clone()).or_insert(0.0) += record.get(key).copied().unwrap_or(0.0);
-        }
+        accumulate_metrics(&mut metrics, record, metric_keys)?;
     }
 
-    metrics
+    Ok(metrics)
 }
 
 fn summarize_features(
     query: GeoVizViewportQuery,
     features: &[GeoVizAggregationFeature],
     metric_keys: &[String],
-) -> GeoVizAggregationSummary {
+) -> Result<GeoVizAggregationSummary> {
     let mut metrics = metric_keys
         .iter()
         .map(|key| (key.clone(), 0.0))
@@ -1173,20 +1195,17 @@ fn summarize_features(
             }
         };
         visible_point_count += point_count;
-        for key in metric_keys {
-            *metrics.entry(key.clone()).or_insert(0.0) +=
-                feature_metrics.get(key).copied().unwrap_or(0.0);
-        }
+        accumulate_metrics(&mut metrics, feature_metrics, metric_keys)?;
     }
 
-    GeoVizAggregationSummary {
+    Ok(GeoVizAggregationSummary {
         bounds: query.bounds,
         zoom: query.zoom,
         metrics,
         visible_point_count,
         visible_cluster_count,
         visible_unclustered_count,
-    }
+    })
 }
 
 fn feature_key(feature: &GeoVizAggregationFeature) -> String {
