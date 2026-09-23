@@ -27,42 +27,86 @@ mkdir -p "$artifact_dir" "$target_dir"
 } > "$artifact_dir/fingerprint.txt"
 
 run_benchmark() {
-  local log="$1"
-  shift
+  local package="$1"
+  local bench="$2"
+  local log="$3"
+  shift 3
   {
-    # Worktrees share this target directory, but Cargo's package fingerprints
-    # can reuse the other revision's executable when checkout mtimes are older.
-    # Remove only this package's compiled artifacts before BOTH revisions (and
-    # seed runs). Keep dependency builds and Iai's measured baselines intact.
-    CARGO_TARGET_DIR="$target_dir" cargo clean -p moenarch-maps-kernels-core --release --locked
+    # Baseline and candidate worktrees share the target directory. Cargo can
+    # otherwise reuse an executable compiled from the other revision when
+    # checkout mtimes make the stale artifact appear fresh.
+    # Clean only the benchmarked package so dependency builds and Iai
+    # measurements remain reusable.
+    CARGO_TARGET_DIR="$target_dir" cargo clean -p "$package" --release --locked
     CARGO_TARGET_DIR="$target_dir" \
-      cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- "$@"
+      cargo bench -p "$package" --bench "$bench" --locked -- "$@"
   } 2>&1 | tee "$artifact_dir/$log"
 }
 
 base_sha="${PERF_BASE_SHA:-}"
-bench_path="crates/moenarch-maps-kernels-core/benches/performance_smoke.rs"
+baseline_dir=""
+worktree_parent=""
 
-if [[ -n "$base_sha" ]] && git cat-file -e "$base_sha:$bench_path" 2>/dev/null; then
+cleanup() {
+  if [[ -n "$baseline_dir" ]]; then
+    git worktree remove --force "$baseline_dir" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$worktree_parent" ]]; then
+    rm -rf "$worktree_parent"
+  fi
+}
+trap cleanup EXIT
+
+if [[ -n "$base_sha" ]]; then
   worktree_parent="$(mktemp -d)"
   baseline_dir="$worktree_parent/base"
-
-  cleanup() {
-    git worktree remove --force "$baseline_dir" >/dev/null 2>&1 || true
-    rm -rf "$worktree_parent"
-  }
-  trap cleanup EXIT
-
   git worktree add --detach "$baseline_dir" "$base_sha" >/dev/null
-  (
-    cd "$baseline_dir"
-    run_benchmark baseline.log --save-baseline=pr_base
-  )
-
-  run_benchmark candidate.log --baseline=pr_base
-else
-  printf '%s\n' \
-    'No compatible base benchmark exists; this run seeds the performance-smoke contract.' \
-    | tee "$artifact_dir/baseline.log"
-  run_benchmark candidate.log --save-baseline=seed
 fi
+
+benchmark_pair() {
+  local package="$1"
+  local bench="$2"
+  local bench_path="$3"
+  local baseline_log="$4"
+  local candidate_log="$5"
+
+  # A benchmark introduced by the candidate has no comparable base identity.
+  # Seed it now so future changes can compare deterministic instruction counts.
+  if [[ -n "$baseline_dir" ]] && git -C "$baseline_dir" cat-file -e "HEAD:$bench_path" 2>/dev/null; then
+    (
+      cd "$baseline_dir"
+      run_benchmark "$package" "$bench" "$baseline_log" --save-baseline=pr_base
+    )
+    run_benchmark "$package" "$bench" "$candidate_log" --baseline=pr_base
+  else
+    printf 'No compatible base benchmark exists for %s; seeding its performance-smoke contract.\n' "$package" \
+      | tee "$artifact_dir/$baseline_log"
+    run_benchmark "$package" "$bench" "$candidate_log" --save-baseline=seed
+  fi
+}
+
+benchmark_if_present() {
+  local package="$1"
+  local bench="$2"
+  local bench_path="$3"
+  local baseline_log="$4"
+  local candidate_log="$5"
+
+  if [[ -f "$bench_path" ]]; then
+    benchmark_pair "$package" "$bench" "$bench_path" "$baseline_log" "$candidate_log"
+  fi
+}
+
+benchmark_if_present \
+  moenarch-maps-kernels-core \
+  performance_smoke \
+  crates/moenarch-maps-kernels-core/benches/performance_smoke.rs \
+  baseline.log \
+  candidate.log
+
+benchmark_if_present \
+  moenarch-geo-clustering \
+  performance_smoke \
+  crates/moenarch-geo-clustering/benches/performance_smoke.rs \
+  clustering-baseline.log \
+  clustering-candidate.log

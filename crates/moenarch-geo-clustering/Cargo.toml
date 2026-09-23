@@ -20,3 +20,11 @@ runtime-core.workspace = true
 geo-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rstar.workspace = true
+
+[dev-dependencies]
+iai-callgrind = "=0.16.1"
+
+[[bench]]
+name = "performance_smoke"
+harness = false
