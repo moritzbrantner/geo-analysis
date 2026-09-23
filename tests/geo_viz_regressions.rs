@@ -328,3 +328,39 @@ fn flow_aggregation_rejects_weight_overflow() {
 
     assert!(error.to_string().contains("finite numeric range"));
 }
+
+
+#[test]
+fn heat_viewport_uses_spatial_index_without_changing_source_order() {
+    let index = GeoPointIndex::new(
+        [
+            point(Some("east"), 179.8, 10.0, 2.0),
+            point(Some("outside"), 0.0, 10.0, 9.0),
+            point(Some("west"), -179.8, 10.0, 4.0),
+        ],
+        GeoVizAggregationOptions::default(),
+    )
+    .expect("point index");
+
+    let heat = index
+        .get_heat_features(
+            GeoVizViewportQuery {
+                bounds: [170.0, 0.0, -170.0, 20.0],
+                zoom: 4.0,
+            },
+            GeoVizHeatOptions {
+                radius_meters: None,
+                weight_metric: Some("weight".to_string()),
+            },
+        )
+        .expect("dateline heat viewport");
+
+    let ids = heat
+        .features
+        .iter()
+        .map(|feature| feature.id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec!["east", "west"]);
+    assert_eq!(heat.summary.visible_point_count, 2);
+    assert_eq!(heat.summary.max_weight, 4.0);
+}
