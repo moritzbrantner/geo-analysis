@@ -110,10 +110,7 @@ pub struct SquareCoverageOptions {
 ///
 /// Polygon coverage is controlled by `containment`. Points and lines use H3's
 /// point and line algorithms. Geometry collections are covered recursively.
-pub fn geometry_to_h3_cells(
-    geometry: &Geometry,
-    options: H3CoverageOptions,
-) -> Result<H3CellSet> {
+pub fn geometry_to_h3_cells(geometry: &Geometry, options: H3CoverageOptions) -> Result<H3CellSet> {
     geometry.validate()?;
     validate_geographic_geometry(geometry)?;
     validate_max_cells(options.max_cells)?;
@@ -129,7 +126,10 @@ pub fn geometry_to_h3_cells(
         &mut cells,
     )?;
 
-    let mut cells = cells.into_iter().map(|cell| cell.to_string()).collect::<Vec<_>>();
+    let mut cells = cells
+        .into_iter()
+        .map(|cell| cell.to_string())
+        .collect::<Vec<_>>();
     cells.sort_unstable();
 
     Ok(H3CellSet {
@@ -157,9 +157,10 @@ pub fn h3_cells_to_geometry(cell_set: &H3CellSet) -> Result<Geometry> {
     for value in &cell_set.cells {
         let cell = CellIndex::from_str(value)
             .map_err(|error| invalid_argument(format!("invalid H3 cell `{value}`: {error}")))?;
-        if cell.resolution() != Resolution::try_from(cell_set.resolution).map_err(|error| {
-            invalid_argument(format!("invalid H3 resolution: {error}"))
-        })? {
+        if cell.resolution()
+            != Resolution::try_from(cell_set.resolution)
+                .map_err(|error| invalid_argument(format!("invalid H3 resolution: {error}")))?
+        {
             return Err(invalid_argument(format!(
                 "H3 cell `{value}` does not match resolution {}",
                 cell_set.resolution
@@ -309,9 +310,9 @@ fn collect_h3_geometry(
         GeoGeometry::MultiLineString(lines) => {
             let mut plotter = PlotterBuilder::new(resolution).build();
             for line in lines.0 {
-                plotter
-                    .add_batch(line.lines())
-                    .map_err(|error| invalid_argument(format!("invalid H3 line string: {error}")))?;
+                plotter.add_batch(line.lines()).map_err(|error| {
+                    invalid_argument(format!("invalid H3 line string: {error}"))
+                })?;
             }
             for cell in plotter.plot() {
                 insert_h3_cell(
@@ -350,25 +351,17 @@ fn collect_h3_geometry(
         }
         GeoGeometry::GeometryCollection(collection) => {
             for geometry in collection.0 {
-                collect_h3_geometry(
-                    geometry,
-                    resolution,
-                    containment,
-                    max_cells,
-                    output,
-                )?;
+                collect_h3_geometry(geometry, resolution, containment, max_cells, output)?;
             }
             Ok(())
         }
-        GeoGeometry::Rect(rectangle) => {
-            collect_h3_geometry(
-                GeoGeometry::Polygon(rectangle.to_polygon()),
-                resolution,
-                containment,
-                max_cells,
-                output,
-            )
-        }
+        GeoGeometry::Rect(rectangle) => collect_h3_geometry(
+            GeoGeometry::Polygon(rectangle.to_polygon()),
+            resolution,
+            containment,
+            max_cells,
+            output,
+        ),
         GeoGeometry::Triangle(triangle) => collect_h3_geometry(
             GeoGeometry::Polygon(triangle.to_polygon()),
             resolution,
@@ -379,11 +372,7 @@ fn collect_h3_geometry(
     }
 }
 
-fn insert_h3_cell(
-    cells: &mut HashSet<CellIndex>,
-    cell: CellIndex,
-    max_cells: usize,
-) -> Result<()> {
+fn insert_h3_cell(cells: &mut HashSet<CellIndex>, cell: CellIndex, max_cells: usize) -> Result<()> {
     cells.insert(cell);
     if cells.len() > max_cells {
         return Err(invalid_argument(format!(
@@ -408,13 +397,11 @@ fn collect_square_geometry(
     output: &mut BTreeSet<SquareCell>,
 ) -> Result<()> {
     match geometry {
-        Geometry::Point { coordinates } => {
-            insert_square_cell(
-                output,
-                square_cell_for_position(*coordinates, options.zoom)?,
-                options.max_cells,
-            )
-        }
+        Geometry::Point { coordinates } => insert_square_cell(
+            output,
+            square_cell_for_position(*coordinates, options.zoom)?,
+            options.max_cells,
+        ),
         Geometry::MultiPoint { coordinates } => {
             for position in coordinates {
                 insert_square_cell(
@@ -519,9 +506,7 @@ fn latitude_to_tile_y(latitude: f64, zoom: u8) -> u32 {
     let latitude = latitude.clamp(-WEB_MERCATOR_MAX_LATITUDE, WEB_MERCATOR_MAX_LATITUDE);
     let radians = latitude.to_radians();
     let normalized = (1.0 - radians.tan().asinh() / std::f64::consts::PI) / 2.0;
-    (normalized * dimension)
-        .floor()
-        .clamp(0.0, dimension - 1.0) as u32
+    (normalized * dimension).floor().clamp(0.0, dimension - 1.0) as u32
 }
 
 fn tile_x_to_longitude(x: u32, zoom: u8) -> f64 {
@@ -529,8 +514,7 @@ fn tile_x_to_longitude(x: u32, zoom: u8) -> f64 {
 }
 
 fn tile_y_to_latitude(y: u32, zoom: u8) -> f64 {
-    let n = std::f64::consts::PI
-        * (1.0 - 2.0 * f64::from(y) / f64::from(square_dimension(zoom)));
+    let n = std::f64::consts::PI * (1.0 - 2.0 * f64::from(y) / f64::from(square_dimension(zoom)));
     n.sinh().atan().to_degrees()
 }
 
@@ -722,28 +706,22 @@ fn to_geo_geometry(geometry: &Geometry) -> GeoGeometry<f64> {
         Geometry::LineString { coordinates } => {
             GeoGeometry::LineString(to_geo_line_string(coordinates))
         }
-        Geometry::MultiLineString { coordinates } => GeoGeometry::MultiLineString(
-            MultiLineString(
-                coordinates
-                    .iter()
-                    .map(|line| to_geo_line_string(line))
-                    .collect(),
-            ),
-        ),
-        Geometry::Polygon { coordinates } => {
-            GeoGeometry::Polygon(to_geo_polygon(coordinates))
-        }
+        Geometry::MultiLineString { coordinates } => GeoGeometry::MultiLineString(MultiLineString(
+            coordinates
+                .iter()
+                .map(|line| to_geo_line_string(line))
+                .collect(),
+        )),
+        Geometry::Polygon { coordinates } => GeoGeometry::Polygon(to_geo_polygon(coordinates)),
         Geometry::MultiPolygon { coordinates } => GeoGeometry::MultiPolygon(MultiPolygon(
             coordinates
                 .iter()
                 .map(|polygon| to_geo_polygon(polygon))
                 .collect(),
         )),
-        Geometry::GeometryCollection { geometries } => {
-            GeoGeometry::GeometryCollection(GeometryCollection(
-                geometries.iter().map(to_geo_geometry).collect(),
-            ))
-        }
+        Geometry::GeometryCollection { geometries } => GeoGeometry::GeometryCollection(
+            GeometryCollection(geometries.iter().map(to_geo_geometry).collect()),
+        ),
     }
 }
 
@@ -780,12 +758,7 @@ fn from_geo_multi_polygon(multi_polygon: &MultiPolygon<f64>) -> Geometry {
             .map(|polygon| {
                 let mut rings = Vec::with_capacity(1 + polygon.interiors().len());
                 rings.push(from_geo_line_string(polygon.exterior()));
-                rings.extend(
-                    polygon
-                        .interiors()
-                        .iter()
-                        .map(from_geo_line_string),
-                );
+                rings.extend(polygon.interiors().iter().map(from_geo_line_string));
                 rings
             })
             .collect(),

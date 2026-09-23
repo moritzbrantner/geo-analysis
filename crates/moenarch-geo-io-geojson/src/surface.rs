@@ -2,9 +2,9 @@
 
 use geo_core::{Coordinate, GeoFeature, GeoFeatureCollection, Geometry};
 use geo_grid::{
-    geometry_to_h3_cells, geometry_to_square_cells, h3_cells_to_geometry,
-    square_cells_to_geometry, H3CellSet, H3Containment, H3CoverageOptions, SquareCell,
-    SquareCellSet, SquareCoverageOptions, DEFAULT_CELL_BUDGET,
+    geometry_to_h3_cells, geometry_to_square_cells, h3_cells_to_geometry, square_cells_to_geometry,
+    H3CellSet, H3Containment, H3CoverageOptions, SquareCell, SquareCellSet, SquareCoverageOptions,
+    DEFAULT_CELL_BUDGET,
 };
 use runtime_core::{
     OperationId, PackageSurface, RuntimeCapabilities, SurfaceOperation, SurfaceRequest,
@@ -371,9 +371,11 @@ fn from_square_cells_value(request: FromSquareCellsRequest) -> Result<serde_json
 fn document_geometry(document: GeoJsonDocument) -> Geometry {
     match document {
         GeoJsonDocument::Geometry(geometry) => geometry,
-        GeoJsonDocument::Feature(feature) => feature.geometry.unwrap_or(Geometry::GeometryCollection {
-            geometries: Vec::new(),
-        }),
+        GeoJsonDocument::Feature(feature) => {
+            feature.geometry.unwrap_or(Geometry::GeometryCollection {
+                geometries: Vec::new(),
+            })
+        }
         GeoJsonDocument::FeatureCollection(collection) => Geometry::GeometryCollection {
             geometries: collection
                 .features
