@@ -2,6 +2,7 @@
 
 pub use geo_clustering;
 pub use geo_core::*;
+pub use geo_grid;
 pub use geo_io_geojson;
 pub use geo_io_osm;
 pub use geo_viz;
