@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 
 const WEB_MERCATOR_MAX_LATITUDE: f64 = 85.051_128_779_806_6;
 const MAX_SQUARE_ZOOM: u8 = 24;
-const DEFAULT_MAX_CELLS: usize = 250_000;
+/// Default output budget for discrete-grid conversions.
+pub const DEFAULT_CELL_BUDGET: usize = 250_000;
 const MAX_SQUARE_SCAN_CELLS: u64 = 2_000_000;
 
 fn invalid_argument(message: impl Into<String>) -> GeoError {
@@ -240,7 +241,7 @@ pub fn square_cells_to_geometry(cell_set: &SquareCellSet) -> Result<Geometry> {
 }
 
 fn default_max_cells() -> usize {
-    DEFAULT_MAX_CELLS
+    DEFAULT_CELL_BUDGET
 }
 
 fn validate_max_cells(max_cells: usize) -> Result<()> {
