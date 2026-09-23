@@ -2,7 +2,7 @@
 
 pub mod surface;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use geo_core::{BBox, Coordinate, GeoError, Result};
 use serde::{Deserialize, Serialize};
@@ -96,6 +96,15 @@ impl<Properties: Clone> ClusterIndex<Properties> {
             .into_iter()
             .map(validate_point)
             .collect::<Result<Vec<_>>>()?;
+        let mut point_ids = BTreeSet::new();
+        for point in &points {
+            if !point_ids.insert(point.id.as_str()) {
+                return Err(invalid_argument(format!(
+                    "point id must be unique: {}",
+                    point.id
+                )));
+            }
+        }
 
         Ok(Self { points, options })
     }
@@ -208,6 +217,11 @@ fn validate_bounds(bounds: ClusterBounds) -> Result<()> {
     if bounds[1] > bounds[3] {
         return Err(invalid_argument("bounds south must be <= north"));
     }
+    if bounds[0] < -180.0 || bounds[0] > 180.0 || bounds[2] < -180.0 || bounds[2] > 180.0 {
+        return Err(invalid_argument(
+            "bounds longitude values must be between -180 and 180",
+        ));
+    }
     BBox::new([
         bounds[0].min(bounds[2]),
         bounds[1],
@@ -246,12 +260,25 @@ fn cluster_for_points<Properties>(
     points: &[ClusterPoint<Properties>],
 ) -> Cluster {
     let point_count = points.len();
-    let (lon_sum, lat_sum) = points.iter().fold((0.0, 0.0), |(lon, lat), point| {
-        (lon + point.longitude, lat + point.latitude)
-    });
+    let (sin_sum, cos_sum, lat_sum) =
+        points
+            .iter()
+            .fold((0.0, 0.0, 0.0), |(sin_sum, cos_sum, lat_sum), point| {
+                let longitude = point.longitude.to_radians();
+                (
+                    sin_sum + longitude.sin(),
+                    cos_sum + longitude.cos(),
+                    lat_sum + point.latitude,
+                )
+            });
+    let longitude = if sin_sum.abs() <= f64::EPSILON && cos_sum.abs() <= f64::EPSILON {
+        points.iter().map(|point| point.longitude).sum::<f64>() / point_count as f64
+    } else {
+        sin_sum.atan2(cos_sum).to_degrees()
+    };
     Cluster {
         id: format!("z{zoom}:{x}:{y}"),
-        longitude: lon_sum / point_count as f64,
+        longitude,
         latitude: lat_sum / point_count as f64,
         point_count,
     }
