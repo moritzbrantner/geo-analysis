@@ -1,6 +1,11 @@
 //! Library-owned runtime surface for `geo-io-geojson`.
 
 use geo_core::{Coordinate, GeoFeature, GeoFeatureCollection, Geometry};
+use geo_grid::{
+    geometry_to_h3_cells, geometry_to_square_cells, h3_cells_to_geometry,
+    square_cells_to_geometry, H3CellSet, H3Containment, H3CoverageOptions, SquareCell,
+    SquareCellSet, SquareCoverageOptions, DEFAULT_CELL_BUDGET,
+};
 use runtime_core::{
     OperationId, PackageSurface, RuntimeCapabilities, SurfaceOperation, SurfaceRequest,
     SurfaceResponse,
@@ -42,6 +47,37 @@ pub fn package_surface() -> PackageSurface {
                 "Converts the geo-core Geometry JSON shape into a GeoJSON geometry object.",
                 serde_json::json!({"geometry": {"type": "Point", "coordinates": [8.0, 49.0]}}),
             ),
+            operation(
+                "geoJson.toH3Cells",
+                "GeoJSON to H3 cells",
+                "Approximately covers GeoJSON geometry with canonical H3 cells.",
+                serde_json::json!({
+                    "geoJson": {"type": "Polygon", "coordinates": [[[8.6,48.8],[8.8,48.8],[8.8,49.0],[8.6,49.0],[8.6,48.8]]]},
+                    "resolution": 8,
+                    "containment": "covers"
+                }),
+            ),
+            operation(
+                "geoJson.fromH3Cells",
+                "H3 cells to GeoJSON",
+                "Dissolves canonical H3 cells into an approximate GeoJSON MultiPolygon.",
+                serde_json::json!({"resolution": 8, "cells": []}),
+            ),
+            operation(
+                "geoJson.toSquareCells",
+                "GeoJSON to square cells",
+                "Approximately covers GeoJSON geometry with hierarchical Web-Mercator XYZ square cells.",
+                serde_json::json!({
+                    "geoJson": {"type": "Polygon", "coordinates": [[[8.6,48.8],[8.8,48.8],[8.8,49.0],[8.6,49.0],[8.6,48.8]]]},
+                    "zoom": 12
+                }),
+            ),
+            operation(
+                "geoJson.fromSquareCells",
+                "Square cells to GeoJSON",
+                "Reconstructs the selected XYZ square-cell area as an approximate GeoJSON MultiPolygon.",
+                serde_json::json!({"zoom": 12, "cells": [{"x": 2146, "y": 1408}]}),
+            ),
         ],
     }
 }
@@ -73,6 +109,10 @@ pub fn run_surface_operation(request: SurfaceRequest) -> Result<SurfaceResponse,
         "geo.bounds" | "geoJson.bounds" => bounds_value(parse_input(request.input)?)?,
         "geo.distance" | "geoJson.distance" => distance_value(parse_input(request.input)?)?,
         "geo.toGeoJson" | "geoJson.toGeoJson" => to_geojson_value(parse_input(request.input)?)?,
+        "geoJson.toH3Cells" => to_h3_cells_value(parse_input(request.input)?)?,
+        "geoJson.fromH3Cells" => from_h3_cells_value(parse_input(request.input)?)?,
+        "geoJson.toSquareCells" => to_square_cells_value(parse_input(request.input)?)?,
+        "geoJson.fromSquareCells" => from_square_cells_value(parse_input(request.input)?)?,
         operation => {
             return Err(format!(
                 "unsupported operation `{operation}` for {}",
@@ -126,6 +166,40 @@ struct DistanceRequest {
 #[serde(rename_all = "camelCase")]
 struct ToGeoJsonRequest {
     geometry: Geometry,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToH3CellsRequest {
+    geo_json: serde_json::Value,
+    resolution: u8,
+    #[serde(default)]
+    containment: H3Containment,
+    #[serde(default)]
+    max_cells: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FromH3CellsRequest {
+    resolution: u8,
+    cells: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToSquareCellsRequest {
+    geo_json: serde_json::Value,
+    zoom: u8,
+    #[serde(default)]
+    max_cells: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FromSquareCellsRequest {
+    zoom: u8,
+    cells: Vec<SquareCell>,
 }
 
 #[derive(Debug, Default)]
@@ -216,6 +290,98 @@ fn to_geojson_value(request: ToGeoJsonRequest) -> Result<serde_json::Value, Stri
         "geoJson": serde_json::to_value(to_geojson_geometry(&request.geometry)).map_err(|error| error.to_string())?,
         "bbox": bbox
     }))
+}
+
+fn to_h3_cells_value(request: ToH3CellsRequest) -> Result<serde_json::Value, String> {
+    let geometry = document_geometry(geojson_document(request.geo_json)?);
+    let cell_set = geometry_to_h3_cells(
+        &geometry,
+        H3CoverageOptions {
+            resolution: request.resolution,
+            containment: request.containment,
+            max_cells: request.max_cells.unwrap_or(DEFAULT_CELL_BUDGET),
+        },
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(serde_json::json!({
+        "grid": "h3",
+        "resolution": cell_set.resolution,
+        "containment": request.containment,
+        "cellCount": cell_set.cells.len(),
+        "cells": cell_set.cells
+    }))
+}
+
+fn from_h3_cells_value(request: FromH3CellsRequest) -> Result<serde_json::Value, String> {
+    let cell_set = H3CellSet {
+        resolution: request.resolution,
+        cells: request.cells,
+    };
+    let geometry = h3_cells_to_geometry(&cell_set).map_err(|error| error.to_string())?;
+    Ok(serde_json::json!({
+        "grid": "h3",
+        "resolution": cell_set.resolution,
+        "cellCount": cell_set.cells.len(),
+        "geoJson": serde_json::to_value(to_geojson_geometry(&geometry))
+            .map_err(|error| error.to_string())?
+    }))
+}
+
+fn to_square_cells_value(request: ToSquareCellsRequest) -> Result<serde_json::Value, String> {
+    let geometry = document_geometry(geojson_document(request.geo_json)?);
+    let cell_set = geometry_to_square_cells(
+        &geometry,
+        SquareCoverageOptions {
+            zoom: request.zoom,
+            max_cells: request.max_cells.unwrap_or(DEFAULT_CELL_BUDGET),
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    let cell_ids = cell_set
+        .cells
+        .iter()
+        .map(|cell| cell.id(cell_set.zoom))
+        .collect::<Vec<_>>();
+
+    Ok(serde_json::json!({
+        "grid": "square",
+        "zoom": cell_set.zoom,
+        "cellCount": cell_set.cells.len(),
+        "cellIds": cell_ids,
+        "cells": cell_set.cells
+    }))
+}
+
+fn from_square_cells_value(request: FromSquareCellsRequest) -> Result<serde_json::Value, String> {
+    let cell_set = SquareCellSet {
+        zoom: request.zoom,
+        cells: request.cells,
+    };
+    let geometry = square_cells_to_geometry(&cell_set).map_err(|error| error.to_string())?;
+    Ok(serde_json::json!({
+        "grid": "square",
+        "zoom": cell_set.zoom,
+        "cellCount": cell_set.cells.len(),
+        "geoJson": serde_json::to_value(to_geojson_geometry(&geometry))
+            .map_err(|error| error.to_string())?
+    }))
+}
+
+fn document_geometry(document: GeoJsonDocument) -> Geometry {
+    match document {
+        GeoJsonDocument::Geometry(geometry) => geometry,
+        GeoJsonDocument::Feature(feature) => feature.geometry.unwrap_or(Geometry::GeometryCollection {
+            geometries: Vec::new(),
+        }),
+        GeoJsonDocument::FeatureCollection(collection) => Geometry::GeometryCollection {
+            geometries: collection
+                .features
+                .into_iter()
+                .filter_map(|feature| feature.geometry)
+                .collect(),
+        },
+    }
 }
 
 fn geojson_document(input: serde_json::Value) -> Result<GeoJsonDocument, String> {
@@ -323,6 +489,48 @@ mod tests {
             serde_json::json!([8.0, 49.0, 9.0, 50.0])
         );
         assert_eq!(response.value["coordinateCount"], 2);
+    }
+
+    #[test]
+    fn covers_geojson_with_h3_and_reconstructs_geometry() {
+        let covered = run_surface_operation(SurfaceRequest {
+            operation: OperationId::new("geoJson.toH3Cells"),
+            input: serde_json::json!({
+                "geoJson": {"type": "Point", "coordinates": [8.68, 48.89]},
+                "resolution": 8
+            }),
+        })
+        .expect("H3 coverage");
+
+        assert_eq!(covered.value["cellCount"], 1);
+        let cells = covered.value["cells"].clone();
+        let reconstructed = run_surface_operation(SurfaceRequest {
+            operation: OperationId::new("geoJson.fromH3Cells"),
+            input: serde_json::json!({"resolution": 8, "cells": cells}),
+        })
+        .expect("H3 reconstruction");
+        assert_eq!(reconstructed.value["geoJson"]["type"], "MultiPolygon");
+    }
+
+    #[test]
+    fn covers_geojson_with_square_cells_and_reconstructs_geometry() {
+        let covered = run_surface_operation(SurfaceRequest {
+            operation: OperationId::new("geoJson.toSquareCells"),
+            input: serde_json::json!({
+                "geoJson": {"type": "Point", "coordinates": [8.68, 48.89]},
+                "zoom": 12
+            }),
+        })
+        .expect("square coverage");
+
+        assert_eq!(covered.value["cellCount"], 1);
+        let cells = covered.value["cells"].clone();
+        let reconstructed = run_surface_operation(SurfaceRequest {
+            operation: OperationId::new("geoJson.fromSquareCells"),
+            input: serde_json::json!({"zoom": 12, "cells": cells}),
+        })
+        .expect("square reconstruction");
+        assert_eq!(reconstructed.value["geoJson"]["type"], "MultiPolygon");
     }
 
     #[test]
