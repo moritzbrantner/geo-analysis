@@ -2,7 +2,7 @@
 
 pub mod surface;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use geo_core::{BBox, Coordinate, GeoError, Result};
 use serde::{Deserialize, Serialize};
@@ -96,6 +96,15 @@ impl<Properties: Clone> ClusterIndex<Properties> {
             .into_iter()
             .map(validate_point)
             .collect::<Result<Vec<_>>>()?;
+        let mut point_ids = BTreeSet::new();
+        for point in &points {
+            if !point_ids.insert(point.id.as_str()) {
+                return Err(invalid_argument(format!(
+                    "point id must be unique: {}",
+                    point.id
+                )));
+            }
+        }
 
         Ok(Self { points, options })
     }
@@ -207,6 +216,15 @@ fn validate_bounds(bounds: ClusterBounds) -> Result<()> {
     }
     if bounds[1] > bounds[3] {
         return Err(invalid_argument("bounds south must be <= north"));
+    }
+    if bounds[0] < -180.0
+        || bounds[0] > 180.0
+        || bounds[2] < -180.0
+        || bounds[2] > 180.0
+    {
+        return Err(invalid_argument(
+            "bounds longitude values must be between -180 and 180",
+        ));
     }
     BBox::new([
         bounds[0].min(bounds[2]),
