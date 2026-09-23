@@ -139,10 +139,7 @@ impl<Properties: Clone> ClusterIndex<Properties> {
         let mut collect_envelope = |west: f64, east: f64| {
             visible_indexes.extend(
                 self.spatial_index
-                    .locate_in_envelope(AABB::from_corners(
-                        [west, bounds[1]],
-                        [east, bounds[3]],
-                    ))
+                    .locate_in_envelope(AABB::from_corners([west, bounds[1]], [east, bounds[3]]))
                     .map(|point| point.point_index),
             );
         };
