@@ -45,7 +45,11 @@ mod tests {
                 "describe",
                 "geoJson.bounds",
                 "geoJson.distance",
-                "geoJson.toGeoJson"
+                "geoJson.toGeoJson",
+                "geoJson.toH3Cells",
+                "geoJson.fromH3Cells",
+                "geoJson.toSquareCells",
+                "geoJson.fromSquareCells"
             ]
         );
     }
