@@ -77,7 +77,9 @@ pub struct GeoVizScalarFieldIndex {
     bounds: GeoVizBounds,
     has_bounds: bool,
     options: GeoVizScalarFieldOptions,
-    value_points: Vec<ScalarFieldValuePoint>,
+    point_count: usize,
+    point_value_domain: Option<[f64; 2]>,
+    interpolator: Option<ScalarFieldInterpolator>,
 }
 
 #[derive(Debug, Clone)]
@@ -188,12 +190,18 @@ impl GeoVizScalarFieldIndex {
     ) -> Result<Self> {
         let value_points = resolve_value_points(points, &options);
         let bounds = resolve_scalar_field_bounds(&value_points, &options);
+        let point_count = value_points.len();
+        let point_value_domain = resolve_value_domain(&value_points, &[], options.value_domain);
+        let interpolator =
+            bounds.map(|bounds| ScalarFieldInterpolator::new(&value_points, bounds, &options));
 
         Ok(Self {
             bounds: bounds.unwrap_or([0.0, 0.0, 0.0, 0.0]),
             has_bounds: bounds.is_some(),
             options,
-            value_points,
+            point_count,
+            point_value_domain,
+            interpolator,
         })
     }
 
@@ -204,12 +212,12 @@ impl GeoVizScalarFieldIndex {
 
     /// Returns the number of finite value points.
     pub fn point_count(&self) -> usize {
-        self.value_points.len()
+        self.point_count
     }
 
     /// Returns the point-derived value domain before grid interpolation.
     pub fn value_domain(&self) -> Option<[f64; 2]> {
-        resolve_value_domain(&self.value_points, &[], self.options.value_domain)
+        self.point_value_domain
     }
 
     /// Samples the IDW interpolator at a longitude/latitude coordinate.
@@ -218,14 +226,11 @@ impl GeoVizScalarFieldIndex {
             return Ok(None);
         }
 
-        if self.value_points.is_empty() {
+        let Some(interpolator) = &self.interpolator else {
             return Ok(None);
-        }
+        };
 
-        Ok(
-            ScalarFieldInterpolator::new(&self.value_points, self.bounds, &self.options)
-                .value_at(coordinate),
-        )
+        Ok(interpolator.value_at(coordinate))
     }
 
     /// Creates a grid using this index's points and options.
@@ -240,7 +245,15 @@ impl GeoVizScalarFieldIndex {
             };
         };
         let (columns, rows) = resolve_scalar_field_dimensions(bounds, &self.options);
-        let interpolator = ScalarFieldInterpolator::new(&self.value_points, bounds, &self.options);
+        let Some(interpolator) = &self.interpolator else {
+            return GeoVizScalarFieldGrid {
+                bounds,
+                columns: 0,
+                rows: 0,
+                value_domain: self.point_value_domain,
+                values: Vec::new(),
+            };
+        };
         let mut values = Vec::with_capacity(columns * rows);
         let [west, south, east, north] = bounds;
         let longitude_step = (east - west) / columns as f64;
@@ -258,16 +271,14 @@ impl GeoVizScalarFieldIndex {
             bounds,
             columns,
             rows,
-            value_domain: resolve_value_domain(
-                &self.value_points,
-                &values,
-                self.options.value_domain,
-            ),
+            value_domain: resolve_value_domain(&[], &values, self.options.value_domain)
+                .or(self.point_value_domain),
             values,
         }
     }
 }
 
+#[derive(Debug, Clone)]
 struct ScalarFieldInterpolator {
     projected_points: Vec<ProjectedValuePoint>,
     projection: MetricProjection,
@@ -809,6 +820,39 @@ mod tests {
             index.get_value_at_coordinate([13.0, 52.0]).expect("sample"),
             Some(21.5)
         );
+    }
+
+    #[test]
+    fn index_reuses_prepared_interpolator_without_retaining_raw_value_points() {
+        let index = GeoVizScalarFieldIndex::new(
+            [point("west", 0.0, 0.0, 10.0), point("east", 2.0, 0.0, 20.0)],
+            GeoVizScalarFieldOptions {
+                domain_bounds: Some([0.0, -1.0, 2.0, 1.0]),
+                interpolation_k: Some(2),
+                value_metric: Some("temperature".to_string()),
+                ..Default::default()
+            },
+        )
+        .expect("index");
+
+        assert_eq!(index.point_count(), 2);
+        assert_eq!(index.value_domain(), Some([10.0, 20.0]));
+        assert_eq!(
+            index
+                .interpolator
+                .as_ref()
+                .map(|interpolator| interpolator.projected_points.len()),
+            Some(2)
+        );
+
+        let first = index
+            .get_value_at_coordinate([1.0, 0.0])
+            .expect("first sample");
+        let second = index
+            .get_value_at_coordinate([1.0, 0.0])
+            .expect("second sample");
+
+        assert_eq!(first, second);
     }
 
     #[test]

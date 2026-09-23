@@ -110,3 +110,11 @@ benchmark_if_present \
   crates/moenarch-geo-clustering/benches/performance_smoke.rs \
   clustering-baseline.log \
   clustering-candidate.log
+
+
+benchmark_if_present \
+  moenarch-geo-viz \
+  performance_smoke \
+  crates/moenarch-geo-viz/benches/performance_smoke.rs \
+  scalar-field-baseline.log \
+  scalar-field-candidate.log
