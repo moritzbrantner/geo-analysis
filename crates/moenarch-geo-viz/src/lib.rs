@@ -502,17 +502,12 @@ impl GeoPointIndex {
         options: GeoVizHeatOptions,
     ) -> Result<GeoVizHeatAggregation> {
         validate_viewport_query(query)?;
-        let points = self
-            .points
-            .iter()
-            .filter(|point| point_in_bounds(point.longitude, point.latitude, query.bounds))
-            .cloned()
-            .collect::<Vec<_>>();
-        let weighted = points
+        let weighted = self
+            .points_in_bounds(query.bounds)
             .into_iter()
             .filter_map(|point| {
                 let raw_weight = geo_weight(&point.metrics, options.weight_metric.as_deref());
-                (raw_weight > 0.0).then_some((point, raw_weight))
+                (raw_weight > 0.0).then_some((point.clone(), raw_weight))
             })
             .collect::<Vec<_>>();
         let max_weight = maximum_weight(&weighted);
@@ -545,6 +540,28 @@ impl GeoPointIndex {
             },
             features,
         })
+    }
+
+    fn points_in_bounds(&self, bounds: GeoVizBounds) -> Vec<&GeoVizIndexedPoint> {
+        let mut points = Vec::new();
+        let mut collect_envelope = |west: f64, east: f64| {
+            let envelope = AABB::from_corners([west, bounds[1]], [east, bounds[3]]);
+            points.extend(
+                self.spatial_index
+                    .locate_in_envelope(envelope)
+                    .filter_map(|spatial| self.point_lookup.get(&spatial.point_id)),
+            );
+        };
+
+        if bounds[0] <= bounds[2] {
+            collect_envelope(bounds[0], bounds[2]);
+        } else {
+            collect_envelope(bounds[0], 180.0);
+            collect_envelope(-180.0, bounds[2]);
+        }
+
+        points.sort_unstable_by_key(|point| point.source_index);
+        points
     }
 
     /// Returns the nearest point to a coordinate.
@@ -882,21 +899,20 @@ fn bounds_for_points(points: &[GeoVizIndexedPoint]) -> Option<GeoVizBounds> {
 fn bounds_for_flows<'a>(
     flows: impl IntoIterator<Item = &'a GeoVizIndexedFlow>,
 ) -> Option<GeoVizBounds> {
-    let mut coordinates = flows
-        .into_iter()
-        .flat_map(|flow| [flow.from, flow.to])
-        .collect::<Vec<_>>();
-    let first = coordinates.pop()?;
-    let mut west = first[0];
-    let mut south = first[1];
-    let mut east = first[0];
-    let mut north = first[1];
+    let mut flows = flows.into_iter();
+    let first = flows.next()?;
+    let mut west = first.from[0].min(first.to[0]);
+    let mut south = first.from[1].min(first.to[1]);
+    let mut east = first.from[0].max(first.to[0]);
+    let mut north = first.from[1].max(first.to[1]);
 
-    for coordinate in coordinates {
-        west = west.min(coordinate[0]);
-        south = south.min(coordinate[1]);
-        east = east.max(coordinate[0]);
-        north = north.max(coordinate[1]);
+    for flow in flows {
+        for coordinate in [flow.from, flow.to] {
+            west = west.min(coordinate[0]);
+            south = south.min(coordinate[1]);
+            east = east.max(coordinate[0]);
+            north = north.max(coordinate[1]);
+        }
     }
 
     Some([west, south, east, north])
