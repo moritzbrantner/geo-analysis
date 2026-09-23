@@ -150,18 +150,8 @@ fn flow_normalization_uses_the_actual_subunit_maximum() {
 #[test]
 fn origin_destination_aggregation_does_not_merge_nearby_distinct_flows() {
     let index = GeoFlowIndex::new([
-        flow(
-            "a",
-            [13.000_000_1, 52.0],
-            [14.0, 53.0],
-            1.0,
-        ),
-        flow(
-            "b",
-            [13.000_000_2, 52.0],
-            [14.0, 53.0],
-            2.0,
-        ),
+        flow("a", [13.000_000_1, 52.0], [14.0, 53.0], 1.0),
+        flow("b", [13.000_000_2, 52.0], [14.0, 53.0], 2.0),
     ])
     .expect("flow index");
 
@@ -217,7 +207,6 @@ fn geographic_viewports_reject_out_of_range_longitudes() {
     assert!(viz_error.to_string().contains("longitude"));
 }
 
-
 #[test]
 fn viewport_queries_reject_non_finite_zoom() {
     let points = GeoPointIndex::new(
@@ -241,7 +230,6 @@ fn viewport_queries_reject_non_finite_zoom() {
 
     assert!(error.to_string().contains("zoom"));
 }
-
 
 #[test]
 fn dateline_cluster_centroid_stays_near_the_dateline() {
@@ -281,7 +269,6 @@ fn dateline_cluster_centroid_stays_near_the_dateline() {
         cluster.longitude
     );
 }
-
 
 #[test]
 fn heat_summary_rejects_metric_overflow() {
@@ -328,7 +315,6 @@ fn flow_aggregation_rejects_weight_overflow() {
 
     assert!(error.to_string().contains("finite numeric range"));
 }
-
 
 #[test]
 fn heat_viewport_uses_spatial_index_without_changing_source_order() {
