@@ -217,11 +217,7 @@ fn validate_bounds(bounds: ClusterBounds) -> Result<()> {
     if bounds[1] > bounds[3] {
         return Err(invalid_argument("bounds south must be <= north"));
     }
-    if bounds[0] < -180.0
-        || bounds[0] > 180.0
-        || bounds[2] < -180.0
-        || bounds[2] > 180.0
-    {
+    if bounds[0] < -180.0 || bounds[0] > 180.0 || bounds[2] < -180.0 || bounds[2] > 180.0 {
         return Err(invalid_argument(
             "bounds longitude values must be between -180 and 180",
         ));
