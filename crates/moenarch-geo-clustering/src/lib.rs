@@ -264,12 +264,25 @@ fn cluster_for_points<Properties>(
     points: &[ClusterPoint<Properties>],
 ) -> Cluster {
     let point_count = points.len();
-    let (lon_sum, lat_sum) = points.iter().fold((0.0, 0.0), |(lon, lat), point| {
-        (lon + point.longitude, lat + point.latitude)
-    });
+    let (sin_sum, cos_sum, lat_sum) =
+        points
+            .iter()
+            .fold((0.0, 0.0, 0.0), |(sin_sum, cos_sum, lat_sum), point| {
+                let longitude = point.longitude.to_radians();
+                (
+                    sin_sum + longitude.sin(),
+                    cos_sum + longitude.cos(),
+                    lat_sum + point.latitude,
+                )
+            });
+    let longitude = if sin_sum.abs() <= f64::EPSILON && cos_sum.abs() <= f64::EPSILON {
+        points.iter().map(|point| point.longitude).sum::<f64>() / point_count as f64
+    } else {
+        sin_sum.atan2(cos_sum).to_degrees()
+    };
     Cluster {
         id: format!("z{zoom}:{x}:{y}"),
-        longitude: lon_sum / point_count as f64,
+        longitude,
         latitude: lat_sum / point_count as f64,
         point_count,
     }
