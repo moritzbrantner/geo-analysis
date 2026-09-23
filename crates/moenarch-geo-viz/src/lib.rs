@@ -470,7 +470,7 @@ impl GeoPointIndex {
         &self,
         query: GeoVizViewportQuery,
     ) -> Result<GeoVizAggregation> {
-        validate_bounds(query.bounds)?;
+        validate_viewport_query(query)?;
         let zoom = query.zoom.round().clamp(0.0, u8::MAX as f64) as u8;
         let raw_features = self.clusters.get_clusters(query.bounds, zoom)?;
         let mut seen = BTreeSet::new();
@@ -501,7 +501,7 @@ impl GeoPointIndex {
         query: GeoVizViewportQuery,
         options: GeoVizHeatOptions,
     ) -> Result<GeoVizHeatAggregation> {
-        validate_bounds(query.bounds)?;
+        validate_viewport_query(query)?;
         let points = self
             .points
             .iter()
@@ -683,7 +683,7 @@ impl GeoFlowIndex {
         query: GeoVizViewportQuery,
         options: GeoVizFlowOptions,
     ) -> Result<GeoVizFlowAggregation> {
-        validate_bounds(query.bounds)?;
+        validate_viewport_query(query)?;
         let min_weight = options.min_weight.unwrap_or(0.0);
         if !min_weight.is_finite() || min_weight < 0.0 {
             return Err(invalid_argument(
@@ -767,7 +767,7 @@ impl GeoJsonIndex {
         query: GeoVizViewportQuery,
         options: GeoVizGeoJsonOptions,
     ) -> Result<GeoVizGeoJsonViewport> {
-        validate_bounds(query.bounds)?;
+        validate_viewport_query(query)?;
         let mut collection = if options.clip_to_viewport {
             filter_collection_for_bounds(&self.collection, query.bounds)?
         } else {
@@ -991,6 +991,14 @@ fn visit_geometry_positions(geometry: &GeoDataGeometry, visit: &mut dyn FnMut([f
             }
         }
     }
+}
+
+fn validate_viewport_query(query: GeoVizViewportQuery) -> Result<()> {
+    validate_bounds(query.bounds)?;
+    if !query.zoom.is_finite() {
+        return Err(invalid_argument("viewport zoom must be finite"));
+    }
+    Ok(())
 }
 
 fn validate_bounds(bounds: GeoVizBounds) -> Result<()> {
