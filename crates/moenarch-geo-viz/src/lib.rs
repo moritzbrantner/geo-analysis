@@ -515,10 +515,7 @@ impl GeoPointIndex {
                 (raw_weight > 0.0).then_some((point, raw_weight))
             })
             .collect::<Vec<_>>();
-        let max_weight = weighted
-            .iter()
-            .map(|(_, weight)| *weight)
-            .fold(1.0_f64, f64::max);
+        let max_weight = maximum_weight(&weighted);
         let features = weighted
             .into_iter()
             .map(|(point, raw_weight)| GeoVizHeatFeature {
@@ -707,10 +704,7 @@ impl GeoFlowIndex {
             weighted = aggregate_flows(weighted, &self.metric_keys);
         }
 
-        let max_weight = weighted
-            .iter()
-            .map(|(_, weight)| *weight)
-            .fold(1.0_f64, f64::max);
+        let max_weight = maximum_weight(&weighted);
         let features = weighted
             .into_iter()
             .map(|(flow, raw_weight)| GeoVizFlowFeature {
@@ -1006,6 +1000,15 @@ fn validate_bounds(bounds: GeoVizBounds) -> Result<()> {
     if bounds[1] > bounds[3] {
         return Err(invalid_argument("viewport south must be <= north"));
     }
+    if bounds[0] < -180.0
+        || bounds[0] > 180.0
+        || bounds[2] < -180.0
+        || bounds[2] > 180.0
+    {
+        return Err(invalid_argument(
+            "viewport longitude bounds must stay between -180 and 180",
+        ));
+    }
     if bounds[1] < -90.0 || bounds[3] > 90.0 {
         return Err(invalid_argument(
             "viewport latitude bounds must stay between -90 and 90",
@@ -1062,16 +1065,34 @@ fn geo_weight(metrics: &GeoVizMetricRecord, weight_metric: Option<&str>) -> f64 
     }
 }
 
+fn maximum_weight<T>(weighted: &[(T, f64)]) -> f64 {
+    weighted
+        .iter()
+        .map(|(_, weight)| *weight)
+        .fold(0.0_f64, f64::max)
+}
+
+fn canonical_coordinate_bits(value: f64) -> u64 {
+    if value == 0.0 {
+        0.0_f64.to_bits()
+    } else {
+        value.to_bits()
+    }
+}
+
 fn aggregate_flows(
     weighted: Vec<(GeoVizIndexedFlow, f64)>,
     metric_keys: &[String],
 ) -> Vec<(GeoVizIndexedFlow, f64)> {
-    let mut grouped = BTreeMap::<String, (GeoVizIndexedFlow, f64)>::new();
+    let mut grouped =
+        BTreeMap::<(u64, u64, u64, u64), (GeoVizIndexedFlow, f64)>::new();
 
     for (flow, raw_weight) in weighted {
-        let key = format!(
-            "{:.6},{:.6}->{:.6},{:.6}",
-            flow.from[0], flow.from[1], flow.to[0], flow.to[1]
+        let key = (
+            canonical_coordinate_bits(flow.from[0]),
+            canonical_coordinate_bits(flow.from[1]),
+            canonical_coordinate_bits(flow.to[0]),
+            canonical_coordinate_bits(flow.to[1]),
         );
         let entry = grouped.entry(key).or_insert_with(|| {
             let mut flow = flow.clone();
