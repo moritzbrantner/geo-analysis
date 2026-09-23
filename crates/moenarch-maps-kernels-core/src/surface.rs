@@ -8,11 +8,13 @@ use runtime_core::{
 use serde::Deserialize;
 
 use crate::{
-    densify_line_flat, path_summary_flat, resample_line_flat, resample_ring_flat,
+    densify_line_flat_with_limit, path_summary_flat, resample_line_flat, resample_ring_flat,
     simplify_line_flat,
 };
 
-const MAX_VALUES: usize = 100_000;
+// The existing input-point budget also bounds generated output. Checking only
+// source coordinates does not bound resampling or densification work.
+const MAX_COORDINATES: usize = 100_000;
 
 /// Returns the package surface exposed by every transport wrapper.
 pub fn package_surface() -> PackageSurface {
@@ -36,7 +38,7 @@ pub fn package_surface() -> PackageSurface {
             surface_operation(
                 "maps.applyKernel",
                 "Apply map kernel",
-                "Resamples flat 2D coordinates as an open line or closed ring.",
+                "Resamples flat 2D coordinates as an open line or closed ring (at most 100000 output points).",
                 serde_json::json!({"coordinates": [0.0, 0.0, 10.0, 0.0], "coordinateCount": 3, "closed": false}),
             ),
             surface_operation(
@@ -54,7 +56,7 @@ pub fn package_surface() -> PackageSurface {
             surface_operation(
                 "maps.densifyLine",
                 "Densify line",
-                "Inserts flat 2D line points so no segment exceeds the requested length.",
+                "Inserts flat 2D line points so no segment exceeds the requested length (at most 100000 output points).",
                 serde_json::json!({"coordinates": [0.0, 0.0, 3.0, 0.0], "maxSegmentLength": 1.0}),
             ),
         ],
@@ -130,19 +132,14 @@ struct DensifyRequest {
 
 fn summary_value(request: SummaryRequest) -> Result<serde_json::Value, String> {
     validate_coordinates(&request.coordinates, request.closed)?;
-    let coordinate_count = request.coordinates.len() / 2;
-    let segment_count = if request.closed {
-        coordinate_count
-    } else {
-        coordinate_count - 1
-    };
-    let bbox = bbox(&request.coordinates);
+    let summary = path_summary_flat(&request.coordinates, request.closed)
+        .map_err(|error| error.to_string())?;
     Ok(serde_json::json!({
-        "coordinateCount": coordinate_count,
-        "closed": request.closed,
-        "segmentCount": segment_count,
-        "totalLength": total_length(&request.coordinates, request.closed),
-        "bbox": bbox
+        "coordinateCount": summary.point_count,
+        "closed": summary.closed,
+        "segmentCount": summary.segment_count,
+        "totalLength": summary.length,
+        "bbox": summary.bounds
     }))
 }
 
@@ -161,6 +158,11 @@ fn path_summary_value(request: SummaryRequest) -> Result<serde_json::Value, Stri
 
 fn apply_value(request: ApplyRequest) -> Result<serde_json::Value, String> {
     validate_coordinates(&request.coordinates, request.closed)?;
+    if request.coordinate_count > MAX_COORDINATES {
+        return Err(format!(
+            "coordinate count must not exceed {MAX_COORDINATES}"
+        ));
+    }
     let coordinates = if request.closed {
         resample_ring_flat(&request.coordinates, request.coordinate_count)
     } else {
@@ -188,8 +190,12 @@ fn simplify_line_value(request: SimplifyRequest) -> Result<serde_json::Value, St
 
 fn densify_line_value(request: DensifyRequest) -> Result<serde_json::Value, String> {
     validate_coordinates(&request.coordinates, false)?;
-    let coordinates = densify_line_flat(&request.coordinates, request.max_segment_length)
-        .map_err(|error| error.to_string())?;
+    let coordinates = densify_line_flat_with_limit(
+        &request.coordinates,
+        request.max_segment_length,
+        MAX_COORDINATES,
+    )
+    .map_err(|error| error.to_string())?;
     Ok(serde_json::json!({
         "inputPointCount": request.coordinates.len() / 2,
         "outputPointCount": coordinates.len() / 2,
@@ -199,8 +205,11 @@ fn densify_line_value(request: DensifyRequest) -> Result<serde_json::Value, Stri
 }
 
 fn validate_coordinates(coordinates: &[f64], closed: bool) -> Result<(), String> {
-    if coordinates.len() > MAX_VALUES * 2 {
-        return Err(format!("coordinates must not exceed {}", MAX_VALUES * 2));
+    if coordinates.len() > MAX_COORDINATES * 2 {
+        return Err(format!(
+            "coordinates must not exceed {}",
+            MAX_COORDINATES * 2
+        ));
     }
     if coordinates.len() < if closed { 6 } else { 4 } {
         return Err(if closed {
@@ -216,35 +225,6 @@ fn validate_coordinates(coordinates: &[f64], closed: bool) -> Result<(), String>
         return Err("coordinates must be finite".to_string());
     }
     Ok(())
-}
-
-fn bbox(coordinates: &[f64]) -> [f64; 4] {
-    let mut min_x = coordinates[0];
-    let mut min_y = coordinates[1];
-    let mut max_x = coordinates[0];
-    let mut max_y = coordinates[1];
-    for point in coordinates.chunks_exact(2).skip(1) {
-        min_x = min_x.min(point[0]);
-        min_y = min_y.min(point[1]);
-        max_x = max_x.max(point[0]);
-        max_y = max_y.max(point[1]);
-    }
-    [min_x, min_y, max_x, max_y]
-}
-
-fn total_length(coordinates: &[f64], closed: bool) -> f64 {
-    let point_count = coordinates.len() / 2;
-    let segment_count = if closed { point_count } else { point_count - 1 };
-    (0..segment_count)
-        .map(|index| {
-            let next = (index + 1) % point_count;
-            let x0 = coordinates[index * 2];
-            let y0 = coordinates[index * 2 + 1];
-            let x1 = coordinates[next * 2];
-            let y1 = coordinates[next * 2 + 1];
-            (x1 - x0).hypot(y1 - y0)
-        })
-        .sum()
 }
 
 #[cfg(test)]

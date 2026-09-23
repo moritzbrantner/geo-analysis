@@ -29,9 +29,15 @@ mkdir -p "$artifact_dir" "$target_dir"
 run_benchmark() {
   local log="$1"
   shift
-  CARGO_TARGET_DIR="$target_dir" \
-    cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- "$@" \
-    2>&1 | tee "$artifact_dir/$log"
+  {
+    # Worktrees share this target directory, but Cargo's package fingerprints
+    # can reuse the other revision's executable when checkout mtimes are older.
+    # Remove only this package's compiled artifacts before BOTH revisions (and
+    # seed runs). Keep dependency builds and Iai's measured baselines intact.
+    CARGO_TARGET_DIR="$target_dir" cargo clean -p moenarch-maps-kernels-core --release --locked
+    CARGO_TARGET_DIR="$target_dir" \
+      cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- "$@"
+  } 2>&1 | tee "$artifact_dir/$log"
 }
 
 base_sha="${PERF_BASE_SHA:-}"
@@ -50,9 +56,8 @@ if [[ -n "$base_sha" ]] && git cat-file -e "$base_sha:$bench_path" 2>/dev/null; 
   git worktree add --detach "$baseline_dir" "$base_sha" >/dev/null
   (
     cd "$baseline_dir"
-    CARGO_TARGET_DIR="$target_dir" \
-      cargo bench -p moenarch-maps-kernels-core --bench performance_smoke --locked -- --save-baseline=pr_base
-  ) 2>&1 | tee "$artifact_dir/baseline.log"
+    run_benchmark baseline.log --save-baseline=pr_base
+  )
 
   run_benchmark candidate.log --baseline=pr_base
 else
