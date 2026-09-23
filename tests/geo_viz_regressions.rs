@@ -216,3 +216,28 @@ fn geographic_viewports_reject_out_of_range_longitudes() {
         .expect_err("invalid geographic viewport");
     assert!(viz_error.to_string().contains("longitude"));
 }
+
+
+#[test]
+fn viewport_queries_reject_non_finite_zoom() {
+    let points = GeoPointIndex::new(
+        [point(Some("a"), 13.0, 52.0, 1.0)],
+        GeoVizAggregationOptions::default(),
+    )
+    .expect("point index");
+
+    let error = points
+        .get_heat_features(
+            GeoVizViewportQuery {
+                bounds: [12.0, 51.0, 15.0, 54.0],
+                zoom: f64::NAN,
+            },
+            GeoVizHeatOptions {
+                radius_meters: None,
+                weight_metric: None,
+            },
+        )
+        .expect_err("non-finite zoom must not leak into output");
+
+    assert!(error.to_string().contains("zoom"));
+}
