@@ -6,6 +6,7 @@ The extracted package surfaces are:
 
 - Rust library crate `moenarch-geo-core` with lib target `geo_core`
 - Rust library crate `moenarch-geo-io-geojson` with lib target `geo_io_geojson`
+- Rust library crate `moenarch-geo-grid` with lib target `geo_grid` for H3 and square-cell coverage
 - Rust library crate `moenarch-geo-io-osm` with lib target `geo_io_osm`
 - CLI, HTTP, WASM, npm wrapper, and Vite app adapters for each surface
 
@@ -15,6 +16,7 @@ The extracted package surfaces are:
 [dependencies]
 geo-core = { package = "moenarch-geo-core", version = "0.1.0" }
 geo-io-geojson = { package = "moenarch-geo-io-geojson", version = "0.1.0" }
+geo-grid = { package = "moenarch-geo-grid", version = "0.1.0" }
 geo-io-osm = { package = "moenarch-geo-io-osm", version = "0.1.0" }
 ```
 

@@ -1,0 +1,29 @@
+[package]
+name = "moenarch-geo-grid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Discrete H3 and square-grid coverage algorithms for geo-core geometry."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords = ["geo", "geospatial", "h3", "grid", "tiles"]
+categories = ["science::geo", "algorithms", "data-structures"]
+
+[lib]
+name = "geo_grid"
+
+[dependencies]
+geo-core.workspace = true
+geo.workspace = true
+h3o.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+iai-callgrind = "=0.16.1"
+
+[[bench]]
+name = "performance_smoke"
+harness = false
