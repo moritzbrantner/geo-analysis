@@ -134,11 +134,12 @@ fn densification_keeps_zero_length_segments_and_spacing() {
 
 #[test]
 fn surface_resampling_enforces_the_existing_point_budget() {
+    let degenerate = [0.0; 6];
     for closed in [false, true] {
         for count in [100_001_usize, usize::MAX] {
             assert!(run(
                 "maps.applyKernel",
-                json!({"coordinates": [0.0; 6], "coordinateCount": count, "closed": closed}),
+                json!({"coordinates": degenerate, "coordinateCount": count, "closed": closed}),
             )
             .is_err());
         }
