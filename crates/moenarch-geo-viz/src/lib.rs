@@ -1028,11 +1028,7 @@ fn validate_bounds(bounds: GeoVizBounds) -> Result<()> {
     if bounds[1] > bounds[3] {
         return Err(invalid_argument("viewport south must be <= north"));
     }
-    if bounds[0] < -180.0
-        || bounds[0] > 180.0
-        || bounds[2] < -180.0
-        || bounds[2] > 180.0
-    {
+    if bounds[0] < -180.0 || bounds[0] > 180.0 || bounds[2] < -180.0 || bounds[2] > 180.0 {
         return Err(invalid_argument(
             "viewport longitude bounds must stay between -180 and 180",
         ));
@@ -1112,8 +1108,7 @@ fn aggregate_flows(
     weighted: Vec<(GeoVizIndexedFlow, f64)>,
     metric_keys: &[String],
 ) -> Result<Vec<(GeoVizIndexedFlow, f64)>> {
-    let mut grouped =
-        BTreeMap::<(u64, u64, u64, u64), (GeoVizIndexedFlow, f64)>::new();
+    let mut grouped = BTreeMap::<(u64, u64, u64, u64), (GeoVizIndexedFlow, f64)>::new();
 
     for (flow, raw_weight) in weighted {
         let key = (
