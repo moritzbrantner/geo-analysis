@@ -19,6 +19,12 @@ const MAX_SQUARE_ZOOM: u8 = 24;
 /// Default output budget for discrete-grid conversions.
 pub const DEFAULT_CELL_BUDGET: usize = 250_000;
 const MAX_SQUARE_SCAN_CELLS: u64 = 2_000_000;
+/// Maximum number of generated H3 cells (duplicates included) per allowed
+/// output cell. Bounds the work of collections that repeat the same geometry.
+const H3_WORK_FACTOR: usize = 4;
+/// Distance, in tile units, within which a coordinate counts as lying on a
+/// square-grid tile edge. Absorbs Mercator forward/inverse round-off.
+const SQUARE_EDGE_TOLERANCE: f64 = 1e-9;
 
 fn invalid_argument(message: impl Into<String>) -> GeoError {
     GeoError::invalid_argument(message)
@@ -118,11 +124,12 @@ pub fn geometry_to_h3_cells(geometry: &Geometry, options: H3CoverageOptions) -> 
         .map_err(|error| invalid_argument(format!("invalid H3 resolution: {error}")))?;
     let geo_geometry = to_geo_geometry(geometry);
     let mut cells = HashSet::new();
+    let mut budget = H3Budget::new(options.max_cells);
     collect_h3_geometry(
         geo_geometry,
         resolution,
         options.containment,
-        options.max_cells,
+        &mut budget,
         &mut cells,
     )?;
 
@@ -257,7 +264,7 @@ fn collect_h3_geometry(
     geometry: GeoGeometry<f64>,
     resolution: Resolution,
     containment: H3Containment,
-    max_cells: usize,
+    budget: &mut H3Budget,
     output: &mut HashSet<CellIndex>,
 ) -> Result<()> {
     match geometry {
@@ -265,14 +272,14 @@ fn collect_h3_geometry(
             let cell = LatLng::try_from(point.0)
                 .map_err(|error| invalid_argument(format!("invalid H3 point: {error}")))?
                 .to_cell(resolution);
-            insert_h3_cell(output, cell, max_cells)
+            insert_h3_cell(output, cell, budget)
         }
         GeoGeometry::MultiPoint(points) => {
             for point in points.0 {
                 let cell = LatLng::try_from(point.0)
                     .map_err(|error| invalid_argument(format!("invalid H3 point: {error}")))?
                     .to_cell(resolution);
-                insert_h3_cell(output, cell, max_cells)?;
+                insert_h3_cell(output, cell, budget)?;
             }
             Ok(())
         }
@@ -287,7 +294,7 @@ fn collect_h3_geometry(
                     cell.map_err(|error| {
                         invalid_argument(format!("could not plot H3 line: {error}"))
                     })?,
-                    max_cells,
+                    budget,
                 )?;
             }
             Ok(())
@@ -303,7 +310,7 @@ fn collect_h3_geometry(
                     cell.map_err(|error| {
                         invalid_argument(format!("could not plot H3 line string: {error}"))
                     })?,
-                    max_cells,
+                    budget,
                 )?;
             }
             Ok(())
@@ -321,7 +328,7 @@ fn collect_h3_geometry(
                     cell.map_err(|error| {
                         invalid_argument(format!("could not plot H3 line strings: {error}"))
                     })?,
-                    max_cells,
+                    budget,
                 )?;
             }
             Ok(())
@@ -334,7 +341,7 @@ fn collect_h3_geometry(
                 .add(polygon)
                 .map_err(|error| invalid_argument(format!("invalid H3 polygon: {error}")))?;
             for cell in tiler.into_coverage() {
-                insert_h3_cell(output, cell, max_cells)?;
+                insert_h3_cell(output, cell, budget)?;
             }
             Ok(())
         }
@@ -346,13 +353,13 @@ fn collect_h3_geometry(
                 .add_batch(polygons.0)
                 .map_err(|error| invalid_argument(format!("invalid H3 multipolygon: {error}")))?;
             for cell in tiler.into_coverage() {
-                insert_h3_cell(output, cell, max_cells)?;
+                insert_h3_cell(output, cell, budget)?;
             }
             Ok(())
         }
         GeoGeometry::GeometryCollection(collection) => {
             for geometry in collection.0 {
-                collect_h3_geometry(geometry, resolution, containment, max_cells, output)?;
+                collect_h3_geometry(geometry, resolution, containment, budget, output)?;
             }
             Ok(())
         }
@@ -360,24 +367,52 @@ fn collect_h3_geometry(
             GeoGeometry::Polygon(rectangle.to_polygon()),
             resolution,
             containment,
-            max_cells,
+            budget,
             output,
         ),
         GeoGeometry::Triangle(triangle) => collect_h3_geometry(
             GeoGeometry::Polygon(triangle.to_polygon()),
             resolution,
             containment,
-            max_cells,
+            budget,
             output,
         ),
     }
 }
 
-fn insert_h3_cell(cells: &mut HashSet<CellIndex>, cell: CellIndex, max_cells: usize) -> Result<()> {
-    cells.insert(cell);
-    if cells.len() > max_cells {
+/// Request-wide H3 limits: unique output cells plus total generated cells,
+/// shared by every member of a geometry collection.
+struct H3Budget {
+    max_cells: usize,
+    remaining_work: usize,
+}
+
+impl H3Budget {
+    fn new(max_cells: usize) -> Self {
+        Self {
+            max_cells,
+            remaining_work: max_cells.saturating_mul(H3_WORK_FACTOR),
+        }
+    }
+}
+
+fn insert_h3_cell(
+    cells: &mut HashSet<CellIndex>,
+    cell: CellIndex,
+    budget: &mut H3Budget,
+) -> Result<()> {
+    let Some(remaining_work) = budget.remaining_work.checked_sub(1) else {
         return Err(invalid_argument(format!(
-            "H3 coverage exceeds maxCells ({max_cells})"
+            "H3 coverage generates more than {H3_WORK_FACTOR}x maxCells ({}) cells",
+            budget.max_cells
+        )));
+    };
+    budget.remaining_work = remaining_work;
+    cells.insert(cell);
+    if cells.len() > budget.max_cells {
+        return Err(invalid_argument(format!(
+            "H3 coverage exceeds maxCells ({})",
+            budget.max_cells
         )));
     }
     Ok(())
@@ -420,6 +455,26 @@ fn collect_square_geometry(
             }
             Ok(())
         }
+        // Scan multipart geometry per component so distant parts do not
+        // inflate one aggregate bounding box.
+        Geometry::MultiLineString { coordinates } => {
+            for line in coordinates {
+                let component = Geometry::LineString {
+                    coordinates: line.clone(),
+                };
+                scan_square_geometry(&component, options, scan_budget, output)?;
+            }
+            Ok(())
+        }
+        Geometry::MultiPolygon { coordinates } => {
+            for polygon in coordinates {
+                let component = Geometry::Polygon {
+                    coordinates: polygon.clone(),
+                };
+                scan_square_geometry(&component, options, scan_budget, output)?;
+            }
+            Ok(())
+        }
         _ => scan_square_geometry(geometry, options, scan_budget, output),
     }
 }
@@ -438,13 +493,12 @@ fn scan_square_geometry(
         return Ok(());
     };
 
-    // Cells are closed rectangles, so a minimum bound lying exactly on a tile
-    // edge also touches the neighbouring cell to the west/north. Maximum
-    // bounds already floor into the east/south neighbour.
+    // Cells are closed rectangles, so a bound lying on a tile edge touches the
+    // cells on both sides of that edge.
     let min_x = closed_min_tile(longitude_tile_coordinate(west, options.zoom), options.zoom);
-    let max_x = longitude_to_tile_x(east, options.zoom);
+    let max_x = closed_max_tile(longitude_tile_coordinate(east, options.zoom), options.zoom);
     let min_y = closed_min_tile(latitude_tile_coordinate(north, options.zoom), options.zoom);
-    let max_y = latitude_to_tile_y(south, options.zoom);
+    let max_y = closed_max_tile(latitude_tile_coordinate(south, options.zoom), options.zoom);
 
     let candidate_count = u64::from(max_x - min_x + 1)
         .checked_mul(u64::from(max_y - min_y + 1))
@@ -521,14 +575,23 @@ fn tile_index(coordinate: f64, zoom: u8) -> u32 {
     coordinate.floor().clamp(0.0, dimension - 1.0) as u32
 }
 
+/// Nearest tile edge when `coordinate` lies on one within tolerance.
+fn tile_edge(coordinate: f64) -> Option<f64> {
+    let edge = coordinate.round();
+    ((coordinate - edge).abs() <= SQUARE_EDGE_TOLERANCE).then_some(edge)
+}
+
 /// Lowest tile index whose closed extent touches `coordinate`.
 fn closed_min_tile(coordinate: f64, zoom: u8) -> u32 {
-    let index = tile_index(coordinate, zoom);
-    if index > 0 && f64::from(index) == coordinate {
-        index - 1
-    } else {
-        index
+    match tile_edge(coordinate) {
+        Some(edge) => tile_index(edge - 1.0, zoom),
+        None => tile_index(coordinate, zoom),
     }
+}
+
+/// Highest tile index whose closed extent touches `coordinate`.
+fn closed_max_tile(coordinate: f64, zoom: u8) -> u32 {
+    tile_index(tile_edge(coordinate).unwrap_or(coordinate), zoom)
 }
 
 fn longitude_to_tile_x(longitude: f64, zoom: u8) -> u32 {
@@ -991,6 +1054,73 @@ mod tests {
         let mut budget = per_line_cost * 2;
         let mut cells = BTreeSet::new();
         assert!(collect_square_geometry(&collection, options, &mut budget, &mut cells).is_err());
+    }
+
+    #[test]
+    fn square_supercover_tolerates_mercator_round_off_on_tile_edges() {
+        // Standard zoom-2 row boundary; maps to ~0.9999999999999998 rows.
+        let edge_latitude = tile_y_to_latitude(1, 2);
+        let cells = geometry_to_square_cells(
+            &Geometry::LineString {
+                coordinates: vec![[10.0, edge_latitude], [20.0, edge_latitude]],
+            },
+            SquareCoverageOptions {
+                zoom: 2,
+                max_cells: 100,
+            },
+        )
+        .expect("horizontal line on a Mercator row edge");
+        assert_eq!(
+            cells.cells,
+            vec![SquareCell { x: 2, y: 0 }, SquareCell { x: 2, y: 1 }]
+        );
+    }
+
+    #[test]
+    fn square_multipart_geometry_scans_components_separately() {
+        let tiny = |lon: f64, lat: f64| {
+            vec![vec![
+                [lon, lat],
+                [lon + 0.001, lat],
+                [lon + 0.001, lat + 0.001],
+                [lon, lat + 0.001],
+                [lon, lat],
+            ]]
+        };
+        let cells = geometry_to_square_cells(
+            &Geometry::MultiPolygon {
+                coordinates: vec![tiny(-179.99, -80.0), tiny(179.98, 80.0)],
+            },
+            SquareCoverageOptions {
+                zoom: 12,
+                max_cells: 100,
+            },
+        )
+        .expect("distant multipolygon parts");
+        assert!(!cells.cells.is_empty() && cells.cells.len() <= 8);
+    }
+
+    #[test]
+    fn h3_work_budget_is_shared_across_collection_members() {
+        let options = H3CoverageOptions {
+            resolution: 8,
+            containment: H3Containment::Covers,
+            max_cells: 10_000,
+        };
+        let single = geometry_to_h3_cells(&square_polygon(), options).expect("single coverage");
+        let options = H3CoverageOptions {
+            max_cells: single.cells.len(),
+            ..options
+        };
+        let repeated = |copies: usize| Geometry::GeometryCollection {
+            geometries: vec![square_polygon(); copies],
+        };
+
+        assert_eq!(
+            geometry_to_h3_cells(&repeated(2), options).expect("two copies"),
+            single
+        );
+        assert!(geometry_to_h3_cells(&repeated(H3_WORK_FACTOR + 1), options).is_err());
     }
 
     #[test]
