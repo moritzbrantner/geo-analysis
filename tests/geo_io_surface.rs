@@ -20,7 +20,11 @@ fn geojson_surface_exposes_workflow_operations_under_moenarch_name() {
             "describe",
             "geoJson.bounds",
             "geoJson.distance",
-            "geoJson.toGeoJson"
+            "geoJson.toGeoJson",
+            "geoJson.toH3Cells",
+            "geoJson.fromH3Cells",
+            "geoJson.toSquareCells",
+            "geoJson.fromSquareCells"
         ]
     );
 }
@@ -110,5 +114,8 @@ fn geo_io_uses_workspace_internal_geo_dependencies() {
             .collect::<BTreeSet<_>>();
 
         assert!(deps.contains(&("geo-core".to_string(), None)));
+        if package_name == "moenarch-geo-io-geojson" {
+            assert!(deps.contains(&("geo-grid".to_string(), None)));
+        }
     }
 }

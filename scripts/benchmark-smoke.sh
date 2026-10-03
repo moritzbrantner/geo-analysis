@@ -118,3 +118,11 @@ benchmark_if_present \
   crates/moenarch-geo-viz/benches/performance_smoke.rs \
   scalar-field-baseline.log \
   scalar-field-candidate.log
+
+
+benchmark_if_present \
+  moenarch-geo-grid \
+  performance_smoke \
+  crates/moenarch-geo-grid/benches/performance_smoke.rs \
+  geo-grid-baseline.log \
+  geo-grid-candidate.log

@@ -18,6 +18,7 @@ name = "geo_io_geojson"
 [dependencies]
 runtime-core.workspace = true
 geo-core.workspace = true
+geo-grid.workspace = true
 geojson.workspace = true
 serde.workspace = true
 serde_json.workspace = true
