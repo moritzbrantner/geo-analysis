@@ -31,4 +31,7 @@ not the original coordinates.
 
 `maxCells` defaults to 250,000 and must be in `1..=1,000,000`. H3 conversion
 also caps generated cells (duplicates included) at four times `maxCells`, and
-square coverage inspects at most two million candidate cells per request.
+square coverage performs at most eight million constant-time scan steps per
+request. Square lines and polygon boundaries only test cells near each segment;
+polygon interiors are filled row by row from ring crossings, so work grows with
+boundary length and `rows x edges`, not with `bounding box x vertices`.
