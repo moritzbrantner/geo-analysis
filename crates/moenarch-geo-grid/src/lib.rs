@@ -193,7 +193,8 @@ pub fn geometry_to_square_cells(
     validate_max_cells(options.max_cells)?;
 
     let mut cells = BTreeSet::new();
-    collect_square_geometry(geometry, options, &mut cells)?;
+    let mut scan_budget = MAX_SQUARE_SCAN_CELLS;
+    collect_square_geometry(geometry, options, &mut scan_budget, &mut cells)?;
 
     Ok(SquareCellSet {
         zoom: options.zoom,
@@ -394,6 +395,7 @@ fn h3_containment(value: H3Containment) -> ContainmentMode {
 fn collect_square_geometry(
     geometry: &Geometry,
     options: SquareCoverageOptions,
+    scan_budget: &mut u64,
     output: &mut BTreeSet<SquareCell>,
 ) -> Result<()> {
     match geometry {
@@ -414,36 +416,45 @@ fn collect_square_geometry(
         }
         Geometry::GeometryCollection { geometries } => {
             for geometry in geometries {
-                collect_square_geometry(geometry, options, output)?;
+                collect_square_geometry(geometry, options, scan_budget, output)?;
             }
             Ok(())
         }
-        _ => scan_square_geometry(geometry, options, output),
+        _ => scan_square_geometry(geometry, options, scan_budget, output),
     }
 }
 
+/// Scans the candidate cells of a non-point geometry.
+///
+/// `scan_budget` is shared across a whole request (including every member of
+/// a `GeometryCollection`) so repeated children cannot multiply the work.
 fn scan_square_geometry(
     geometry: &Geometry,
     options: SquareCoverageOptions,
+    scan_budget: &mut u64,
     output: &mut BTreeSet<SquareCell>,
 ) -> Result<()> {
     let Some([west, south, east, north]) = geometry_bounds(geometry) else {
         return Ok(());
     };
 
-    let min_x = longitude_to_tile_x(west, options.zoom);
+    // Cells are closed rectangles, so a minimum bound lying exactly on a tile
+    // edge also touches the neighbouring cell to the west/north. Maximum
+    // bounds already floor into the east/south neighbour.
+    let min_x = closed_min_tile(longitude_tile_coordinate(west, options.zoom), options.zoom);
     let max_x = longitude_to_tile_x(east, options.zoom);
-    let min_y = latitude_to_tile_y(north, options.zoom);
+    let min_y = closed_min_tile(latitude_tile_coordinate(north, options.zoom), options.zoom);
     let max_y = latitude_to_tile_y(south, options.zoom);
 
     let candidate_count = u64::from(max_x - min_x + 1)
         .checked_mul(u64::from(max_y - min_y + 1))
         .ok_or_else(|| invalid_argument("square-grid candidate count overflow"))?;
-    if candidate_count > MAX_SQUARE_SCAN_CELLS {
+    if candidate_count > *scan_budget {
         return Err(invalid_argument(format!(
-            "square-grid scan would inspect {candidate_count} cells; limit is {MAX_SQUARE_SCAN_CELLS}"
+            "square-grid scan would inspect {candidate_count} more cells; request scan limit is {MAX_SQUARE_SCAN_CELLS}"
         )));
     }
+    *scan_budget -= candidate_count;
 
     for y in min_y..=max_y {
         for x in min_x..=max_x {
@@ -494,19 +505,38 @@ fn square_cell_for_position(position: Position, zoom: u8) -> Result<SquareCell> 
     })
 }
 
-fn longitude_to_tile_x(longitude: f64, zoom: u8) -> u32 {
-    let dimension = f64::from(square_dimension(zoom));
-    (((longitude + 180.0) / 360.0) * dimension)
-        .floor()
-        .clamp(0.0, dimension - 1.0) as u32
+fn longitude_tile_coordinate(longitude: f64, zoom: u8) -> f64 {
+    ((longitude + 180.0) / 360.0) * f64::from(square_dimension(zoom))
 }
 
-fn latitude_to_tile_y(latitude: f64, zoom: u8) -> u32 {
-    let dimension = f64::from(square_dimension(zoom));
+fn latitude_tile_coordinate(latitude: f64, zoom: u8) -> f64 {
     let latitude = latitude.clamp(-WEB_MERCATOR_MAX_LATITUDE, WEB_MERCATOR_MAX_LATITUDE);
     let radians = latitude.to_radians();
     let normalized = (1.0 - radians.tan().asinh() / std::f64::consts::PI) / 2.0;
-    (normalized * dimension).floor().clamp(0.0, dimension - 1.0) as u32
+    normalized * f64::from(square_dimension(zoom))
+}
+
+fn tile_index(coordinate: f64, zoom: u8) -> u32 {
+    let dimension = f64::from(square_dimension(zoom));
+    coordinate.floor().clamp(0.0, dimension - 1.0) as u32
+}
+
+/// Lowest tile index whose closed extent touches `coordinate`.
+fn closed_min_tile(coordinate: f64, zoom: u8) -> u32 {
+    let index = tile_index(coordinate, zoom);
+    if index > 0 && f64::from(index) == coordinate {
+        index - 1
+    } else {
+        index
+    }
+}
+
+fn longitude_to_tile_x(longitude: f64, zoom: u8) -> u32 {
+    tile_index(longitude_tile_coordinate(longitude, zoom), zoom)
+}
+
+fn latitude_to_tile_y(latitude: f64, zoom: u8) -> u32 {
+    tile_index(latitude_tile_coordinate(latitude, zoom), zoom)
 }
 
 fn tile_x_to_longitude(x: u32, zoom: u8) -> f64 {
@@ -741,7 +771,7 @@ fn to_geo_polygon(rings: &[Vec<Position>]) -> Polygon<f64> {
     let exterior = rings
         .first()
         .map(|ring| to_geo_line_string(ring))
-        .unwrap_or_default();
+        .unwrap_or_else(|| LineString(Vec::new()));
     let interiors = rings
         .iter()
         .skip(1)
@@ -905,6 +935,62 @@ mod tests {
                 geometries: Vec::new()
             }
         );
+    }
+
+    #[test]
+    fn square_supercover_includes_cells_on_both_sides_of_grid_edges() {
+        let options = SquareCoverageOptions {
+            zoom: 1,
+            max_cells: 100,
+        };
+        let vertical = geometry_to_square_cells(
+            &Geometry::LineString {
+                coordinates: vec![[0.0, 10.0], [0.0, 20.0]],
+            },
+            options,
+        )
+        .expect("vertical line on the prime-meridian tile edge");
+        assert_eq!(
+            vertical.cells,
+            vec![SquareCell { x: 0, y: 0 }, SquareCell { x: 1, y: 0 }]
+        );
+
+        let horizontal = geometry_to_square_cells(
+            &Geometry::LineString {
+                coordinates: vec![[10.0, 0.0], [20.0, 0.0]],
+            },
+            options,
+        )
+        .expect("horizontal line on the equator tile edge");
+        assert_eq!(
+            horizontal.cells,
+            vec![SquareCell { x: 1, y: 0 }, SquareCell { x: 1, y: 1 }]
+        );
+    }
+
+    #[test]
+    fn square_scan_budget_is_shared_across_collection_members() {
+        let line = Geometry::LineString {
+            coordinates: vec![[8.60, 48.75], [8.80, 48.95]],
+        };
+        let options = SquareCoverageOptions {
+            zoom: 12,
+            max_cells: 10_000,
+        };
+
+        let mut single_budget = u64::MAX;
+        let mut cells = BTreeSet::new();
+        collect_square_geometry(&line, options, &mut single_budget, &mut cells)
+            .expect("single line scan");
+        let per_line_cost = u64::MAX - single_budget;
+        assert!(per_line_cost > 0);
+
+        let collection = Geometry::GeometryCollection {
+            geometries: vec![line.clone(), line.clone(), line],
+        };
+        let mut budget = per_line_cost * 2;
+        let mut cells = BTreeSet::new();
+        assert!(collect_square_geometry(&collection, options, &mut budget, &mut cells).is_err());
     }
 
     #[test]
