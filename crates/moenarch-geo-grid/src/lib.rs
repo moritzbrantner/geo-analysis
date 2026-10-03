@@ -18,6 +18,9 @@ const WEB_MERCATOR_MAX_LATITUDE: f64 = 85.051_128_779_806_6;
 const MAX_SQUARE_ZOOM: u8 = 24;
 /// Default output budget for discrete-grid conversions.
 pub const DEFAULT_CELL_BUDGET: usize = 250_000;
+/// Hard ceiling for caller-supplied `maxCells`; protects public surfaces from
+/// budgets large enough to disable the work limits.
+pub const MAX_CELL_BUDGET: usize = 1_000_000;
 const MAX_SQUARE_SCAN_CELLS: u64 = 2_000_000;
 /// Maximum number of generated H3 cells (duplicates included) per allowed
 /// output cell. Bounds the work of collections that repeat the same geometry.
@@ -256,6 +259,11 @@ fn default_max_cells() -> usize {
 fn validate_max_cells(max_cells: usize) -> Result<()> {
     if max_cells == 0 {
         return Err(invalid_argument("maxCells must be greater than zero"));
+    }
+    if max_cells > MAX_CELL_BUDGET {
+        return Err(invalid_argument(format!(
+            "maxCells must not exceed {MAX_CELL_BUDGET}"
+        )));
     }
     Ok(())
 }
@@ -1133,6 +1141,27 @@ mod tests {
             SquareCoverageOptions {
                 zoom: 12,
                 max_cells: 10,
+            },
+        )
+        .is_err());
+        assert!(geometry_to_h3_cells(
+            &Geometry::Point {
+                coordinates: [0.0, 0.0],
+            },
+            H3CoverageOptions {
+                resolution: 8,
+                containment: H3Containment::Covers,
+                max_cells: MAX_CELL_BUDGET + 1,
+            },
+        )
+        .is_err());
+        assert!(geometry_to_square_cells(
+            &Geometry::Point {
+                coordinates: [0.0, 0.0],
+            },
+            SquareCoverageOptions {
+                zoom: 12,
+                max_cells: usize::MAX,
             },
         )
         .is_err());

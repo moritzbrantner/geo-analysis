@@ -26,3 +26,9 @@ selected square cells without emitting one polygon per cell.
 Both conversions are approximate: converting geometry to cells quantizes its
 boundary, and converting cells back reconstructs the selected cell coverage,
 not the original coordinates.
+
+## Limits
+
+`maxCells` defaults to 250,000 and must be in `1..=1,000,000`. H3 conversion
+also caps generated cells (duplicates included) at four times `maxCells`, and
+square coverage inspects at most two million candidate cells per request.
