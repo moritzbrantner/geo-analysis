@@ -47,7 +47,7 @@ geo-io-geojson = { package = "moenarch-geo-io-geojson", version = "0.1.0", path 
 geo-io-osm = { package = "moenarch-geo-io-osm", version = "0.1.0", path = "crates/moenarch-geo-io-osm" }
 geo-viz = { package = "moenarch-geo-viz", version = "0.1.0", path = "crates/moenarch-geo-viz" }
 geojson = "1"
-geo = "=0.33.0"
+geo = "=0.33.1"
 h3o = { version = "=0.11.0", features = ["geo"] }
 js-sys = "0.3.82"
 maps-kernels-core = { package = "moenarch-maps-kernels-core", version = "0.1.0", path = "crates/moenarch-maps-kernels-core" }
