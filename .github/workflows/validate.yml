@@ -43,8 +43,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes valgrind
-      - name: Install Iai-Callgrind runner
-        run: cargo install iai-callgrind-runner --version 0.16.1 --locked
+      # The benchmark runner is a pinned executable, not a repository build.
+      # Share it across unchanged runs; a cold cache still installs normally.
+      - name: Cache Iai-Callgrind runner
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/iai-callgrind-runner
+          key: ${{ runner.os }}-${{ runner.arch }}-rust-1.95.0-iai-callgrind-runner-0.16.1
+      - name: Install Iai-Callgrind runner if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -x "$HOME/.cargo/bin/iai-callgrind-runner" ]]; then
+            cargo install iai-callgrind-runner --version 0.16.1 --locked
+          fi
+          test -x "$HOME/.cargo/bin/iai-callgrind-runner"
       - name: Run deterministic performance smoke
         env:
           PERF_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
