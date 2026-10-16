@@ -70,6 +70,7 @@ jobs:
         with:
           toolchain: 1.95.0
           targets: wasm32-unknown-unknown
+          components: rustfmt,clippy
       - name: Install verified wasm-pack
         uses: moritzbrantner/reusable-workflows/.github/actions/install-verified-wasm-cli@5e4c334179c59bbc4a4768bf033ff1d27cd89c0c
         with:
