@@ -39,7 +39,7 @@ categories = ["science::geo", "data-structures", "algorithms"]
 
 [workspace.dependencies]
 clap = { version = "4.5.51", features = ["derive"] }
-base64 = "0.22.1"
+base64 = "0.23.0"
 geo-core = { package = "moenarch-geo-core", version = "0.1.0", path = "crates/moenarch-geo-core" }
 geo-clustering = { package = "moenarch-geo-clustering", version = "0.1.0", path = "crates/moenarch-geo-clustering" }
 geo-grid = { package = "moenarch-geo-grid", version = "0.1.0", path = "crates/moenarch-geo-grid" }
