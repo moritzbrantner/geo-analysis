@@ -46,7 +46,7 @@ jobs:
       # The benchmark runner is a pinned executable, not a repository build.
       # Share it across unchanged runs; a cold cache still installs normally.
       - name: Cache Iai-Callgrind runner
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cargo/bin/iai-callgrind-runner
           key: ${{ runner.os }}-${{ runner.arch }}-rust-1.95.0-iai-callgrind-runner-0.16.1
