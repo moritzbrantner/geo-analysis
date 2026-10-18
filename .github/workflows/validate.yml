@@ -101,3 +101,14 @@ jobs:
         run: bun run build
       - name: Test WASM packages
         run: bun run test
+
+  merge-ready:
+    name: merge-ready
+    if: ${{ always() }}
+    needs: ["rust", "performance-smoke", "web"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: moritzbrantner/reusable-workflows/.github/actions/merge-ready@b0f25f241d76af2584dfc9e375084ff5c5cb97da
+        with:
+          needs: ${{ toJSON(needs) }}
+          required: '["rust", "performance-smoke", "web"]'
