@@ -18,7 +18,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 runtime-core.workspace = true
 geo-viz.workspace = true
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
+getrandom = { version = "0.4.0", features = ["wasm_js"] }
 js-sys = "0.3.82"
 serde.workspace = true
 serde_json.workspace = true
