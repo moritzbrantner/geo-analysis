@@ -50,7 +50,7 @@ fn monotone_lines_match_an_independent_arc_length_oracle() {
         for output_count in [2, 3, source_count, source_count + 5] {
             let output = resample_line_flat(&input, output_count).unwrap();
             assert_eq!(output.len(), output_count * 2);
-            for (index, point) in output.chunks_exact(2).enumerate() {
+            for (index, point) in output.as_chunks::<2>().0.iter().enumerate() {
                 let expected = end * (index as f64 / (output_count - 1) as f64);
                 assert!((point[0] - expected).abs() <= 1e-10);
                 assert_eq!(point[1], 7.0);
@@ -62,7 +62,7 @@ fn monotone_lines_match_an_independent_arc_length_oracle() {
 #[test]
 fn large_finite_line_does_not_overflow_the_sample_index_product() {
     let output = resample_line_flat(&[0.0, 0.0, 1e308, 0.0], 5).unwrap();
-    for (index, point) in output.chunks_exact(2).enumerate() {
+    for (index, point) in output.as_chunks::<2>().0.iter().enumerate() {
         assert!(point[0].is_finite());
         assert!((point[0] / 1e308 - index as f64 / 4.0).abs() < 1e-14);
         assert_eq!(point[1], 0.0);
@@ -73,7 +73,7 @@ fn large_finite_line_does_not_overflow_the_sample_index_product() {
 fn large_finite_ring_does_not_overflow_the_sample_index_product() {
     let output = resample_ring_flat(&[0.0, 0.0, 4e307, 0.0, 0.0, 0.0], 8).unwrap();
     let expected = [0.0, 1.0, 2.0, 3.0, 4.0, 3.0, 2.0, 1.0];
-    for (point, expected) in output.chunks_exact(2).zip(expected) {
+    for (point, expected) in output.as_chunks::<2>().0.iter().zip(expected) {
         assert!(point[0].is_finite());
         assert!((point[0] / 1e307 - expected).abs() < 1e-14);
         assert_eq!(point[1], 0.0);

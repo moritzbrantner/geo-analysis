@@ -288,7 +288,7 @@ fn bounds_flat(coordinates: &[f64]) -> [f64; 4] {
     let mut min_y = coordinates[1];
     let mut max_x = coordinates[0];
     let mut max_y = coordinates[1];
-    for point in coordinates.chunks_exact(2).skip(1) {
+    for point in coordinates.as_chunks::<2>().0.iter().skip(1) {
         min_x = min_x.min(point[0]);
         min_y = min_y.min(point[1]);
         max_x = max_x.max(point[0]);

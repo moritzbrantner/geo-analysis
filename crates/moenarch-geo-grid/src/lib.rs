@@ -621,7 +621,7 @@ fn scan_square_polygon(
             }
         }
         crossings.sort_by(f64::total_cmp);
-        for pair in crossings.chunks_exact(2) {
+        for pair in crossings.as_chunks::<2>().0 {
             // Cells whose centre longitude lies inside this crossing interval.
             let first = (longitude_tile_coordinate(pair[0], zoom) - 0.5)
                 .ceil()
