@@ -39,7 +39,7 @@ categories = ["science::geo", "data-structures", "algorithms"]
 
 [workspace.dependencies]
 clap = { version = "4.5.51", features = ["derive"] }
-base64 = "0.22.1"
+base64 = "0.23.0"
 geo-core = { package = "moenarch-geo-core", version = "0.1.0", path = "crates/moenarch-geo-core" }
 geo-clustering = { package = "moenarch-geo-clustering", version = "0.1.0", path = "crates/moenarch-geo-clustering" }
 geo-grid = { package = "moenarch-geo-grid", version = "0.1.0", path = "crates/moenarch-geo-grid" }
@@ -51,8 +51,8 @@ geo = "=0.33.1"
 h3o = { version = "=0.11.0", features = ["geo"] }
 js-sys = "0.3.82"
 maps-kernels-core = { package = "moenarch-maps-kernels-core", version = "0.1.0", path = "crates/moenarch-maps-kernels-core" }
-osmpbfreader = "0.16"
-protobuf = "2"
+osmpbfreader = "0.19"
+protobuf = "3"
 redb = "4.1"
 regex = "1"
 rstar = "0.13"
