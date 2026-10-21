@@ -209,7 +209,6 @@ fn parse_input<T: for<'de> Deserialize<'de>>(input: serde_json::Value) -> Result
 mod tests {
     use std::io::Write;
 
-    use base64::prelude::*;
     use osmpbfreader::{fileformat, osmformat};
     use protobuf::Message;
 
