@@ -52,7 +52,7 @@ h3o = { version = "=0.11.0", features = ["geo"] }
 js-sys = "0.3.82"
 maps-kernels-core = { package = "moenarch-maps-kernels-core", version = "0.1.0", path = "crates/moenarch-maps-kernels-core" }
 osmpbfreader = "0.19"
-protobuf = "2"
+protobuf = "3"
 redb = "4.1"
 regex = "1"
 rstar = "0.13"
