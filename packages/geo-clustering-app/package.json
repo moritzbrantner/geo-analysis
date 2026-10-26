@@ -4,7 +4,7 @@
   "description": "React app for geo-clustering: GeoJSON-oriented geometry data structures, processing algorithms, and transforms for geo-analysis.",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.json && vite build",
