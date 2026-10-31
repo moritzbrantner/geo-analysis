@@ -213,10 +213,10 @@ pub struct GeoVizHeatAggregation {
 #[derive(Debug, Clone)]
 pub struct GeoPointIndex {
     points: Vec<GeoVizIndexedPoint>,
-    point_lookup: HashMap<String, GeoVizIndexedPoint>,
+    point_lookup: HashMap<String, usize>,
     metric_keys: Vec<String>,
     spatial_index: RTree<SpatialPoint>,
-    clusters: ClusterIndex<String>,
+    clusters: ClusterIndex,
 }
 
 impl GeoPointIndex {
@@ -233,15 +233,16 @@ impl GeoPointIndex {
         let metric_keys = collect_metric_keys(&normalized);
         let point_lookup = normalized
             .iter()
-            .cloned()
-            .map(|point| (point.id.clone(), point))
+            .enumerate()
+            .map(|(point_index, point)| (point.id.clone(), point_index))
             .collect::<HashMap<_, _>>();
         let spatial_index = RTree::bulk_load(
             normalized
                 .iter()
-                .map(|point| SpatialPoint {
+                .enumerate()
+                .map(|(point_index, point)| SpatialPoint {
                     point: [point.longitude, point.latitude],
-                    point_id: point.id.clone(),
+                    point_index,
                 })
                 .collect(),
         );
@@ -250,7 +251,7 @@ impl GeoPointIndex {
                 id: point.id.clone(),
                 longitude: point.longitude,
                 latitude: point.latitude,
-                properties: point.id.clone(),
+                properties: (),
             }),
             ClusterOptions {
                 min_zoom: options.min_zoom.unwrap_or(0),
@@ -275,7 +276,13 @@ impl GeoPointIndex {
 
     /// Returns one point by id.
     pub fn get_point_by_id(&self, point_id: &str) -> Option<GeoVizIndexedPoint> {
-        self.point_lookup.get(point_id).cloned()
+        self.indexed_point(point_id).cloned()
+    }
+
+    fn indexed_point(&self, point_id: &str) -> Option<&GeoVizIndexedPoint> {
+        self.point_lookup
+            .get(point_id)
+            .map(|&point_index| &self.points[point_index])
     }
 
     /// Returns visible features for a viewport.
@@ -292,14 +299,7 @@ impl GeoPointIndex {
             .filter_map(|feature| self.to_aggregation_feature(feature).transpose())
             .collect::<Result<Vec<_>>>()?
             .into_iter()
-            .filter(|feature| {
-                let key = feature_key(feature);
-                if seen.contains(&key) {
-                    return false;
-                }
-                seen.insert(key);
-                true
-            })
+            .filter(|feature| seen.insert(feature_key(feature)))
             .collect::<Vec<_>>();
 
         Ok(GeoVizAggregation {
@@ -362,7 +362,7 @@ impl GeoPointIndex {
             points.extend(
                 self.spatial_index
                     .locate_in_envelope(envelope)
-                    .filter_map(|spatial| self.point_lookup.get(&spatial.point_id)),
+                    .map(|spatial| &self.points[spatial.point_index]),
             );
         };
 
@@ -403,7 +403,7 @@ impl GeoPointIndex {
             }
         }
 
-        Ok(self.point_lookup.get(&nearest.point_id).cloned())
+        Ok(Some(self.points[nearest.point_index].clone()))
     }
 
     /// Returns the zoom where a cluster expands.
@@ -422,22 +422,27 @@ impl GeoPointIndex {
             .get_leaves(cluster_id, limit, offset)
             .into_iter()
             .map(|point| point.id)
-            .filter_map(|point_id| self.point_lookup.get(&point_id).cloned())
+            .filter_map(|point_id| self.indexed_point(&point_id).cloned())
             .collect()
     }
 
     fn to_aggregation_feature(
         &self,
-        item: ClusterItem<String>,
+        item: ClusterItem,
     ) -> Result<Option<GeoVizAggregationFeature>> {
         match item {
             ClusterItem::Cluster(cluster) => {
                 let cluster_id = cluster.id;
                 let point_count = cluster.point_count;
                 let point_count_abbreviated = abbreviate_count(point_count);
-                let leaves = self.get_cluster_leaves(&cluster_id, point_count, 0);
-                let metrics =
-                    sum_metrics(leaves.iter().map(|point| &point.metrics), &self.metric_keys)?;
+                let leaves = self.clusters.get_leaves(&cluster_id, point_count, 0);
+                let metrics = sum_metrics(
+                    leaves
+                        .iter()
+                        .filter_map(|leaf| self.indexed_point(&leaf.id))
+                        .map(|point| &point.metrics),
+                    &self.metric_keys,
+                )?;
 
                 Ok(Some(GeoVizAggregationFeature::Cluster {
                     expansion_zoom: self.get_cluster_expansion_zoom(&cluster_id),
@@ -449,7 +454,7 @@ impl GeoPointIndex {
                 }))
             }
             ClusterItem::Point(cluster_point) => {
-                let Some(point) = self.point_lookup.get(&cluster_point.id).cloned() else {
+                let Some(point) = self.indexed_point(&cluster_point.id).cloned() else {
                     return Ok(None);
                 };
                 Ok(Some(GeoVizAggregationFeature::Point {
@@ -465,7 +470,7 @@ impl GeoPointIndex {
 #[derive(Debug, Clone)]
 struct SpatialPoint {
     point: [f64; 2],
-    point_id: String,
+    point_index: usize,
 }
 
 impl RTreeObject for SpatialPoint {

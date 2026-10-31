@@ -167,11 +167,7 @@ fn filter_collection_for_bounds(
                 .id
                 .clone()
                 .unwrap_or_else(|| serde_json::to_string(&feature.geometry).unwrap_or_default());
-            if seen.contains(&key) {
-                return false;
-            }
-            seen.insert(key);
-            true
+            seen.insert(key)
         })
         .cloned()
         .collect();

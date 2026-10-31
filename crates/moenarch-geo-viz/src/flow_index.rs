@@ -163,19 +163,24 @@ impl GeoFlowIndex {
                 "minWeight must be finite and non-negative",
             ));
         }
-        let mut weighted = self
+        let visible = self
             .flows
             .iter()
             .filter(|flow| flow_intersects_bounds(flow, query.bounds))
             .filter_map(|flow| {
                 let raw_weight = geo_weight(&flow.metrics, options.weight_metric.as_deref());
-                (raw_weight >= min_weight && raw_weight > 0.0).then_some((flow.clone(), raw_weight))
+                (raw_weight >= min_weight && raw_weight > 0.0).then_some((flow, raw_weight))
             })
             .collect::<Vec<_>>();
 
-        if options.aggregate != GeoVizFlowAggregateMode::None {
-            weighted = aggregate_flows(weighted, &self.metric_keys)?;
-        }
+        let weighted = if options.aggregate == GeoVizFlowAggregateMode::None {
+            visible
+                .into_iter()
+                .map(|(flow, raw_weight)| (flow.clone(), raw_weight))
+                .collect()
+        } else {
+            aggregate_flows(visible, &self.metric_keys)?
+        };
 
         let max_weight = maximum_weight(&weighted);
         let features = weighted
@@ -299,7 +304,7 @@ fn canonical_coordinate_bits(value: f64) -> u64 {
 }
 
 fn aggregate_flows(
-    weighted: Vec<(GeoVizIndexedFlow, f64)>,
+    weighted: Vec<(&GeoVizIndexedFlow, f64)>,
     metric_keys: &[String],
 ) -> Result<Vec<(GeoVizIndexedFlow, f64)>> {
     let mut grouped = BTreeMap::<(u64, u64, u64, u64), (GeoVizIndexedFlow, f64)>::new();
@@ -312,14 +317,19 @@ fn aggregate_flows(
             canonical_coordinate_bits(flow.to[1]),
         );
         let entry = grouped.entry(key).or_insert_with(|| {
-            let mut flow = flow.clone();
-            flow.id = format!(
-                "{}:{}:{}:{}",
-                flow.from[0], flow.from[1], flow.to[0], flow.to[1]
-            );
-            flow.label.clear();
-            flow.metrics = metric_keys.iter().map(|key| (key.clone(), 0.0)).collect();
-            (flow, 0.0)
+            let aggregate = GeoVizIndexedFlow {
+                id: format!(
+                    "{}:{}:{}:{}",
+                    flow.from[0], flow.from[1], flow.to[0], flow.to[1]
+                ),
+                source_index: flow.source_index,
+                label: String::new(),
+                from: flow.from,
+                to: flow.to,
+                metrics: metric_keys.iter().map(|key| (key.clone(), 0.0)).collect(),
+                properties: flow.properties.clone(),
+            };
+            (aggregate, 0.0)
         });
         entry.1 = finite_sum(entry.1, raw_weight, "aggregated flow weight")?;
         accumulate_metrics(&mut entry.0.metrics, &flow.metrics, metric_keys)?;

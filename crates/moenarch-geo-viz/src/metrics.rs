@@ -45,8 +45,12 @@ pub(crate) fn accumulate_metrics(
 ) -> Result<()> {
     for key in metric_keys {
         let value = source.get(key).copied().unwrap_or(0.0);
-        let total = target.entry(key.clone()).or_insert(0.0);
-        *total = finite_sum(*total, value, "metric accumulation")?;
+        match target.get_mut(key) {
+            Some(total) => *total = finite_sum(*total, value, "metric accumulation")?,
+            None => {
+                target.insert(key.clone(), finite_sum(0.0, value, "metric accumulation")?);
+            }
+        }
     }
     Ok(())
 }
