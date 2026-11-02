@@ -55,7 +55,7 @@ osmpbfreader = "0.19"
 protobuf = "3"
 redb = "4.1"
 regex = "1"
-rstar = "0.13"
+rstar = "0.14"
 runtime-core = { package = "moritzbrantner-runtime-core", version = "0.2.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
